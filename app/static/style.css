@@ -1,0 +1,49 @@
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#182734;background:#f2f4f5;font-size:15px;line-height:1.5}*{box-sizing:border-box}body{margin:0}header{background:#fff;border-bottom:1px solid #d8dde1;padding:18px 32px;display:flex;align-items:center;gap:28px}.brand{font-size:25px;font-weight:800;text-decoration:none;letter-spacing:-1px;color:#172c3d}.brand span{color:#074b82}.section{color:#646d75}.account{margin-left:auto;display:flex;align-items:center;gap:20px;font-size:13px}main{max-width:1440px;margin:auto;padding:32px}footer{padding:24px 32px;color:#707981;font-size:12px}.heading{display:flex;justify-content:space-between;align-items:center;gap:20px;margin:18px 0 24px}h1{font-size:30px;letter-spacing:-.6px;margin:0 0 8px}h2{font-size:19px;margin:0 0 18px}h3{font-size:16px}.eyebrow{font-size:11px;font-weight:750;letter-spacing:1.5px;color:#5c6c79;margin:0 0 10px}.muted,.hint{color:#606971}.hint{font-size:12px;margin-top:-6px}.panel{background:white;border:1px solid #d9dee3;border-radius:12px;padding:25px}.tabs{display:flex;gap:8px;margin-bottom:18px}.tabs a{padding:10px 17px;text-decoration:none;border-radius:8px;color:#414f5a}.tabs a.selected{background:#182d3f;color:white}.tabs b{margin-left:12px}.table-wrap{padding:0;overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:850px}th{text-align:left;background:#eaedf0;font-size:12px;font-weight:650;color:#596772;padding:14px 20px}td{padding:20px;vertical-align:top;border-top:1px solid #e3e7ea}td:nth-child(1){width:28%}td:nth-child(2){width:36%}td strong{font-size:14px}small{display:block;color:#717a82;font-size:12px;margin:6px 0}.excerpt{font-size:13px;color:#5e6972;margin-bottom:0}.badge{display:inline-block;background:#e9eef2;color:#364d60;padding:6px 10px;border:1px solid #c9d6e0;border-radius:6px;font-size:12px;white-space:nowrap}.button,button{display:inline-block;border:1px solid #bbc6cf;border-radius:7px;padding:9px 15px;color:#233b4e;background:white;cursor:pointer;text-decoration:none;font:inherit;font-size:13px;white-space:nowrap}.primary{background:#143f62;color:white;border-color:#143f62}.danger{color:#984237;border-color:#ddc1bb}.quiet{border:none;background:transparent;color:#53626e;padding:4px}button:hover,.button:hover{filter:brightness(.94)}a{color:#154267}.columns{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin:22px 0}.assignment h2{font-size:20px;margin:8px 0}.assignment p{margin:0}.transcript{white-space:pre-wrap;font-size:17px;line-height:1.8;padding:18px;background:#f5f6f7;border-left:3px solid #8899a7}audio{width:100%;margin-bottom:25px}label{display:block;font-size:13px;font-weight:600;margin-bottom:17px}input,textarea,select{display:block;width:100%;margin-top:6px;padding:10px 12px;border:1px solid #b9c3cc;border-radius:6px;background:white;color:#172c3d;font:inherit;font-weight:400;font-size:14px}textarea{resize:vertical}.check{display:flex;align-items:flex-start;gap:10px;font-weight:400}.check input{width:auto;margin-top:5px}.actions{display:flex;gap:10px;margin-bottom:16px}.notice{background:#dce6ee;border:1px solid #a5bdd0;padding:16px;border-radius:8px}.error{background:#f9e9e5;border-left:3px solid #b65d48;padding:14px;color:#823f31}.back{font-size:13px;text-decoration:none}.history article{padding:18px 0;border-top:1px solid #e4e7ea}.history p{margin:6px 0}details{font-size:12px;margin-top:15px}summary{cursor:pointer;color:#4d5c69}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f5f6;padding:12px}.hash{overflow-wrap:anywhere}blockquote{margin:10px 0;padding:10px 15px;background:#f1f4f6;border-left:2px solid #849aac}dt{font-size:12px;color:#717a81}dd{margin:3px 0 14px}hr{border:0;border-top:1px solid #e0e4e8;margin:25px 0}.login{max-width:440px;margin:7vh auto}.login .primary{width:100%;padding:12px}.empty{text-align:center;padding:60px}.pager{display:flex;justify-content:space-between;margin-top:20px}input:focus,textarea:focus,select:focus,button:focus-visible,a:focus-visible{outline:2px solid #427ba9;outline-offset:2px}@media(max-width:800px){main{padding:18px}.columns{grid-template-columns:1fr}header{padding:14px 18px;flex-wrap:wrap;gap:10px}.section{display:none}.account{gap:8px}h1{font-size:25px}.panel{padding:18px}.table-wrap{padding:0}.tabs a{padding:9px}.actions{flex-wrap:wrap}.heading{align-items:flex-start}}
+
+/* Compact native date/time controls — UI fix 017.1 */
+main input[type="datetime-local"] {
+  box-sizing: border-box;
+  width: 20rem !important;
+  max-width: 100% !important;
+}
+main input[type="date"] {
+  box-sizing: border-box;
+  width: 13rem !important;
+  max-width: 100% !important;
+}
+main input[type="time"] {
+  box-sizing: border-box;
+  width: 9rem !important;
+  max-width: 100% !important;
+}
+@media (max-width: 480px) {
+  main input[type="datetime-local"],
+  main input[type="date"],
+  main input[type="time"] {
+    width: 100% !important;
+  }
+}
+
+/* UI-FIX-017.1: compact native date/time controls */
+main input[type="datetime-local"] {
+  box-sizing: border-box;
+  width: 20rem !important;
+  max-width: 100% !important;
+}
+main input[type="date"] {
+  box-sizing: border-box;
+  width: 13rem !important;
+  max-width: 100% !important;
+}
+main input[type="time"] {
+  box-sizing: border-box;
+  width: 9rem !important;
+  max-width: 100% !important;
+}
+@media (max-width: 480px) {
+  main input[type="datetime-local"],
+  main input[type="date"],
+  main input[type="time"] {
+    width: 100% !important;
+  }
+}

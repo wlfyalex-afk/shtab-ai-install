@@ -1,0 +1,16 @@
+{% extends 'base.html' %}{% from '_meeting_nav0182.html' import meeting_nav %}{% from '_pager0182.html' import pager %}{% block content %}
+<link rel="stylesheet" href="{{ url_for('static',filename='import008.css') }}"><link rel="stylesheet" href="{{ url_for('static',filename='workflow0182.css') }}">
+<a href="{{ url_for('head_access.meetings' if is_head() else 'imports.index') }}">← Совещания</a>
+<div class="heading"><div><h1>{{ row.title }}</h1><p>{{ row.meeting_at|localtime }}{% if row.duration_seconds %} · {{ (row.duration_seconds|float/60)|round(1) }} мин{% endif %}</p></div></div>
+{{ meeting_nav(row.id,'transcript') }}
+{% if transcript %}
+{% if transcript.parts %}<section class="panel"><h2>Исходные части</h2><p>Время отсчитывается по объединённому звуку. Длительность перерывов между частями неизвестна.</p><ol>{% for part in transcript.parts %}<li>{{ part.original_name }}: {{ part.start|mmss }}–{{ part.end|mmss }}</li>{% endfor %}</ol></section>{% endif %}
+<p class="muted">Исходное распознавание. Проверьте имена, числа и термины по записи. Стенограмма, поручения и бриф доступны одной выгрузкой «Скачать ZIP».</p>
+{% include 'player009.html' %}
+<section class="panel"><h2>Стенограмма</h2><p class="muted">{{ transcript.count }} фрагментов</p>
+{{ pager('imports.meeting',row.id,page,total_pages) }}
+{% for s in segments %}<article class="import-segment"><span>{{ s.start|mmss }}–{{ s.end|mmss }}</span><div class="segment-content"><p>{{ s.text }}</p><div class="segment-tools"><button type="button" data-audio-start="{{ s.start }}" data-audio-end="{{ s.end }}">Прослушать</button>{% if not is_head() %}<form method="post" action="{{ url_for('meeting_review.from_segment',mid=row.id) }}"><input type="hidden" name="csrf" value="{{ csrf() }}"><input type="hidden" name="transcript_id" value="{{ transcript.id }}"><input type="hidden" name="index" value="{{ page*page_size+loop.index0 }}"><button>Создать черновик</button></form>{% endif %}</div></div>{% for ref in s.source_parts|default([]) %}<small>Часть {{ ref.part }}: {{ ref.start|mmss }}–{{ ref.end|mmss }}.</small>{% endfor %}</article>{% else %}<p>На этой странице фрагментов нет.</p>{% endfor %}
+{{ pager('imports.meeting',row.id,page,total_pages) }}
+</section>
+{% else %}<section class="panel"><p>Стенограмма ещё не готова. Ход обработки доступен в разделе «Обзор».</p></section>{% endif %}
+{% endblock %}

@@ -1,0 +1,19 @@
+{% macro pager(endpoint,mid,page,total_pages,view='',meeting='',person='',mode='') -%}
+{% if total_pages > 1 %}
+<nav class="pager pager-full" aria-label="Навигация по страницам">
+  {% if page > 0 %}
+    <a href="{{ url_for(endpoint,mid=mid,page=0,view=view,meeting=meeting,person=person,mode=mode) }}">Первая страница</a>
+    <a href="{{ url_for(endpoint,mid=mid,page=page-1,view=view,meeting=meeting,person=person,mode=mode) }}">← Предыдущая</a>
+  {% else %}
+    <span class="disabled">Первая страница</span><span class="disabled">← Предыдущая</span>
+  {% endif %}
+  <span>Страница {{ page+1 }} из {{ total_pages }}</span>
+  {% if page+1 < total_pages %}
+    <a href="{{ url_for(endpoint,mid=mid,page=page+1,view=view,meeting=meeting,person=person,mode=mode) }}">Следующая →</a>
+    <a href="{{ url_for(endpoint,mid=mid,page=total_pages-1,view=view,meeting=meeting,person=person,mode=mode) }}">Последняя страница</a>
+  {% else %}
+    <span class="disabled">Следующая →</span><span class="disabled">Последняя страница</span>
+  {% endif %}
+</nav>
+{% endif %}
+{%- endmacro %}

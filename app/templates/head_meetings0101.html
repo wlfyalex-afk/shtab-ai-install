@@ -1,0 +1,5 @@
+{% extends 'base.html' %}{% block content %}
+<div class="heading"><div><p class="eyebrow">АРХИВ И ОТЧЁТНОСТЬ</p><h1>Совещания</h1><p>Просмотр записей, стенограмм и поручений.</p></div><div class="actions"><a class="button primary" href="{{ url_for('reports0184.period') }}">Отчёт по периоду</a></div></div>
+{% for r in rows %}<section class="panel"><h2><a href="{{ url_for('workflow0182.status',mid=r.id) }}">{{ r.title }}</a></h2><p>{{ r.meeting_at|localtime }}</p><div class="meeting-links"><a href="{{ url_for('workflow0182.status',mid=r.id) }}">Обзор</a><a href="{{ url_for('imports.meeting',mid=r.id) }}">Стенограмма</a><a href="{{ url_for('head.dashboard',meeting=r.id) }}">Поручения</a><a href="{{ url_for('imports.export',mid=r.id,fmt='zip') }}">Скачать ZIP</a></div></section>{% else %}<p>Совещаний пока нет.</p>{% endfor %}
+<div class="pager">{% if page %}<a href="{{ url_for('head_access.meetings',page=page-1) }}">Назад</a>{% endif %}{% if more %}<a href="{{ url_for('head_access.meetings',page=page+1) }}">Далее</a>{% endif %}</div>
+{% endblock %}

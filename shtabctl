@@ -1,0 +1,44 @@
+#!/bin/bash
+set -euo pipefail
+[[ $EUID -eq 0 ]] || { echo 'Run with sudo'; exit 1; }
+cd /opt/shtab-ai-021
+dc() { docker compose -f compose.yaml "$@"; }
+action=${1:-}
+if [[ -z $action ]]; then
+    if [[ -t 0 ]]; then action=menu; else action=status; fi
+fi
+case $action in
+menu) exec bash scripts/menu.sh ;;
+backup|backups|restore|reset-db) python3 scripts/admin021.py "$action" "${@:2}" ;;
+uninstall) bash uninstall.sh "${2:---keep-data}" ;;
+progress) python3 scripts/install-progress.py "${@:2}" ;;
+status)
+    cat /var/lib/shtab-ai-021/status 2>/dev/null || true
+    systemctl show shtab-ai-install.service -p ActiveState -p SubState -p Result
+    if command -v docker >/dev/null; then dc ps; fi
+    ;;
+https-check) bash scripts/check-https.sh ;;
+certificate)
+    install -m 0644 tls-data/caddy/pki/authorities/local/root.crt shtab-ai-root.crt
+    openssl x509 -in shtab-ai-root.crt -noout -fingerprint -sha256
+    echo "Public root certificate: /opt/shtab-ai-021/shtab-ai-root.crt"
+    ;;
+diagnose) bash scripts/diagnose.sh ;;
+logs) journalctl -u shtab-ai-install -n 100 --no-pager ;;
+resume) systemctl reset-failed shtab-ai-install; systemctl start --no-block shtab-ai-install ;;
+bootstrap)
+    [[ $(cat /var/lib/shtab-ai-021/status) == READY_FOR_ADMIN ]] || { echo 'Wait for READY_FOR_ADMIN'; exit 1; }
+    dc exec web python bootstrap021.py
+    ;;
+check)
+    dc exec -T web python manage.py check
+    dc exec -T meeting-worker python meeting_worker.py check --load-model
+    dc exec -T llm-worker python llm_worker013.py check
+    dc exec -T brief-worker python brief_worker017.py check
+    dc exec -T web python check0183.py
+    dc exec -T web python check01845.py
+    ;;
+stop) dc stop proxy web meeting-worker llm-worker brief-worker ollama ;;
+start) dc up -d --wait --wait-timeout 240 web meeting-worker llm-worker brief-worker proxy ;;
+*) echo 'Commands: menu, backup, backups, restore, reset-db, uninstall, certificate, https-check, status, progress, diagnose, logs, resume, bootstrap, check, stop, start'; exit 2 ;;
+esac

@@ -1,0 +1,14 @@
+{% extends 'base.html' %}{% from '_meeting_nav0182.html' import meeting_nav %}{% block content %}
+<link rel="stylesheet" href="{{ url_for('static',filename='import008.css') }}"><link rel="stylesheet" href="{{ url_for('static',filename='workflow0182.css') }}">
+<a href="{{ url_for('imports.index') }}">← Совещания</a><div class="heading"><h1>{{ row.title }}</h1><a class="button" href="{{ url_for('imports.job',uid=row.id) }}">Обновить</a></div>
+{% if row.meeting_id %}{{ meeting_nav(row.meeting_id,'status') }}{% endif %}
+<section class="panel" id="import-job" data-state-url="{{ url_for('imports.state',uid=row.id) }}">
+<h2 id="job-status">{{ state.label }}</h2><p>{{ row.original_name }} · {% if row.source_kind!='UPLOAD' and not row.expected_download_bytes %}Размер уточняется{% else %}{{ ((row.expected_download_bytes or row.total_bytes)/1024/1024)|round(1) }} МиБ{% endif %}</p>
+<progress id="job-progress" max="100" {% if row.status=='UPLOADING' %}value="{{ row.uploaded_bytes/row.total_bytes*100 }}"{% elif row.status=='REVIEW' %}value="100"{% elif row.duration_seconds and row.status in ('CONVERTING','TRANSCRIBING') %}value="{{ row.processed_seconds/row.duration_seconds*100 }}"{% endif %} aria-label="Прогресс текущего этапа"></progress>
+<p id="job-detail" role="status">{{ state.error or 'Браузер можно закрыть после завершения загрузки. Обработка продолжится на сервере.' }}</p>
+<div id="job-result">{% if row.meeting_id %}<a class="button" href="{{ url_for('imports.meeting',mid=row.meeting_id) }}">Открыть стенограмму</a>{% endif %}</div>
+{% if row.status=='UPLOADING' %}<p><a class="button primary" href="{{ url_for('imports.upload',resume=row.id) }}">Продолжить загрузку</a></p><form method="post" action="{{ url_for('imports.cancel',uid=row.id) }}"><input type="hidden" name="csrf" value="{{ csrf() }}"><button>Отменить незавершённую загрузку</button></form>{% endif %}
+{% if row.status=='FAILED' %}<form method="post" action="{{ url_for('imports.retry',uid=row.id) }}"><input type="hidden" name="csrf" value="{{ csrf() }}"><button class="primary">Повторить обработку</button></form>{% endif %}
+<p class="muted">Процент относится к текущему этапу. Во время загрузки модели и на паузах речи он может не меняться. Если появится ошибка, обновите страницу для повторного запуска.</p></section>
+<script src="{{ url_for('static',filename='import-status008.js') }}" defer></script>
+{% endblock %}

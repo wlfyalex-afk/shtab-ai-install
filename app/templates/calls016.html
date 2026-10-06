@@ -1,0 +1,10 @@
+{% extends 'base.html' %}{% block content %}
+<div class="heading"><div><p class="eyebrow">РУЧНОЙ ОБЗВОН</p><h1>Звонки секретаря</h1></div><a class="button" href="{{ url_for('call_assist.calls') }}">Обновить</a></div>
+<p class="muted">Каждый вызов запускает секретарь. Штаб.AI не обзванивает очередь автоматически, не зачитывает поручение и не записывает разговор.</p>
+<div class="panel table-wrap"><table><thead><tr><th>Поручение</th><th>Исполнитель</th><th>Контакт</th><th>Последний звонок</th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr><td><strong>{{ r.instruction }}</strong><small>{{ r.title }}</small><small>Срок: {{ r.due_at|localtime }}{% if r.due_text %} · {{ r.due_text }}{% endif %}</small></td>
+<td>{{ r.display_name or 'Не назначен' }}</td><td>{% if r.contact_id %}<strong>{{ r.contact_value }}</strong><small>{{ r.contact_label }}</small>{% else %}<span class="badge late">Нет телефона</span>{% endif %}</td>
+<td>{% if r.last_called_at %}{{ r.last_called_at|localtime }}<small>{{ outcomes.get(r.last_outcome,r.last_outcome) }}</small>{% else %}Ещё не звонили{% endif %}</td>
+<td>{% if r.contact_id %}<form method="post" action="{{ url_for('call_assist.prepare',task_id=r.id) }}"><input type="hidden" name="csrf" value="{{ csrf() }}"><input type="hidden" name="contact_id" value="{{ r.contact_id }}"><button class="primary">Подготовить звонок</button></form>{% elif g.user.is_admin %}<a href="{{ url_for('call_assist.contacts') }}#person-{{ r.person_id }}">Добавить номер</a>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="empty">Открытых поручений для обзвона нет.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

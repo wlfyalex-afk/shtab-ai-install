@@ -1,0 +1,68 @@
+x-worker: &worker
+  image: shtab-ai-web-dev-test-web:latest
+  restart: unless-stopped
+  init: true
+  read_only: true
+  working_dir: /app
+  tmpfs:
+    - /tmp
+  environment:
+    PYTHONUNBUFFERED: "1"
+    HF_HUB_OFFLINE: "1"
+    HF_HUB_DISABLE_TELEMETRY: "1"
+  volumes:
+    - ./config:/etc/shtab-ai:ro
+    - /srv/video/shtab-ai-docker-test/app-data:/srv/shtab-ai
+    - ./docker-workers:/runner:ro
+  depends_on:
+    db:
+      condition: service_healthy
+
+x-llm-worker: &llm-worker
+  <<: *worker
+  environment:
+    PYTHONUNBUFFERED: "1"
+    SHTAB_OLLAMA_ENDPOINT: http://172.19.0.1:11435
+  depends_on:
+    db:
+      condition: service_healthy
+    ollama-bridge:
+      condition: service_healthy
+
+services:
+  # Restart web and database with the test workers
+  web:
+    restart: unless-stopped
+  db:
+    restart: unless-stopped
+
+  ollama-bridge:
+    image: shtab-ai-web-dev-test-web:latest
+    network_mode: host
+    restart: unless-stopped
+    init: true
+    read_only: true
+    volumes:
+      - ./docker-workers:/runner:ro
+    command: ["python", "-u", "/runner/ollama_bridge.py"]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; o=urllib.request.build_opener(urllib.request.ProxyHandler({})); r=o.open('http://172.19.0.1:11435/api/tags', timeout=5); assert r.status == 200"
+      interval: 10s
+      timeout: 7s
+      retries: 6
+
+  meeting-worker:
+    <<: *worker
+    command: ["python", "-u", "/runner/worker.py", "meeting_worker.py"]
+
+  llm-worker:
+    <<: *llm-worker
+    command: ["python", "-u", "/runner/worker.py", "llm_worker013.py"]
+
+  brief-worker:
+    <<: *llm-worker
+    command: ["python", "-u", "/runner/worker.py", "brief_worker017.py"]

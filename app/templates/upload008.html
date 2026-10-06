@@ -1,0 +1,16 @@
+{% extends 'base.html' %}{% block content %}
+<link rel="stylesheet" href="{{ url_for('static',filename='import008.css') }}">
+<a href="{{ url_for('imports.index') }}">← Совещания</a><h1 class="import-section">Загрузить запись</h1>
+<section class="panel import-form"><form id="upload-form" data-import-id="{{ row.id if row else '' }}" data-file-size="{{ row.total_bytes if row else '' }}">
+{% if group %}<input type="hidden" name="group_id" value="{{ group.id }}"><p>Часть совещания: {{ group.title }}</p>{% endif %}
+<input type="hidden" id="import-csrf" value="{{ csrf() }}">
+<label>Название совещания<input name="title" required maxlength="500" value="{{ row.title if row else (group.title if group else '') }}" {% if row %}readonly{% endif %}></label>
+<label>Дата и время заседания ({{ timezone }})<input name="meeting_at" type="datetime-local" value="{{ group.meeting_at.strftime('%Y-%m-%dT%H:%M') if group else '' }}" {% if not row %}required{% endif %} {% if row %}disabled{% endif %}></label>
+{% if row %}<p>Продолжаем загрузку «{{ row.original_name }}». Выберите тот же файл. Уже полученные части будут сверены.</p>{% endif %}
+<label>Аудио или видео до {{ max_gib }} ГиБ<input id="import-file" type="file" accept="audio/*,video/*,.mkv,.m4a,.flac,.ogg,.avi,.wma,.wmv,.ts" required></label>
+<p class="muted">MP3, WAV, MP4, MKV и другие распространённые форматы со звуком. Длительность — до 8 часов.</p>
+<div class="actions"><button class="primary" id="upload-start">{{ 'Добавить часть' if group else 'Загрузить и распознать' }}</button><button type="button" id="upload-pause" hidden>Приостановить</button></div>
+<progress id="upload-progress" max="100" value="0" aria-label="Загрузка файла"></progress><p id="upload-status" role="status" aria-live="polite">Выберите запись.</p>
+</form><noscript><p class="error">Для загрузки файла включите JavaScript. Просмотр совещаний доступен без него.</p></noscript></section>
+<script src="{{ url_for('static',filename='import-upload008.js') }}" defer></script>
+{% endblock %}

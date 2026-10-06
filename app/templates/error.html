@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block content %}<section class="panel"><h1>Действие не выполнено</h1><p role="alert">{{ message }}</p><a class="button" href="{{ url_for('queue') }}">К очереди</a><p class="muted">Если карточка была открыта в нескольких вкладках, откройте её заново.</p></section>{% endblock %}

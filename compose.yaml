@@ -1,0 +1,168 @@
+name: shtab-ai-021
+
+x-app: &app
+  image: shtab-ai-021-app:0.21.0-rc2
+  build:
+    context: ./app
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:mode=1777
+    - /run/shtab-ai:uid=10001,gid=10001,mode=0700
+    - /etc/shtab-ai:uid=10001,gid=10001,mode=0700
+  environment: &env
+    TZ: Asia/Vladivostok
+    PYTHONDONTWRITEBYTECODE: '1'
+    PYTHONUNBUFFERED: '1'
+    SHTAB_OLLAMA_ENDPOINT: http://ollama:11434
+    SHTAB_TRUSTED_HOSTS: ${SHTAB_TRUSTED_HOSTS:-127.0.0.1,localhost}
+    MODEL_NAME: /srv/shtab-ai/response-models/turbo
+    MODEL_CACHE: /srv/shtab-ai/response-models
+    CPU_THREADS: '2'
+    HF_HUB_OFFLINE: '1'
+    HF_HUB_DISABLE_TELEMETRY: '1'
+    OMP_NUM_THREADS: '2'
+  secrets: [db_password, flask_secret]
+  volumes:
+    - app_data:/srv/shtab-ai
+    - asr_models:/srv/shtab-ai/response-models:ro
+    - ./scripts:/installer:ro
+  depends_on:
+    db:
+      condition: service_healthy
+  stop_grace_period: 30s
+  logging: &logging
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: '3'
+
+services:
+  proxy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    environment:
+      SHTAB_HTTPS_HOST: ${SHTAB_HTTPS_HOST:?Run configure-https.py first}
+    ports:
+      - '${SHTAB_HTTPS_BIND_IP:-0.0.0.0}:443:443'
+      - '${SHTAB_HTTPS_BIND_IP:-0.0.0.0}:80:80'
+    volumes:
+      - ./https/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./tls-data:/data
+      - ./tls-config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    mem_limit: 256m
+    cpus: 0.5
+    logging: *logging
+  init-volumes:
+    image: alpine:3.20
+    restart: 'no'
+    command: ['sh', '-c', 'mkdir -p /data/meeting-imports /data/response-evidence /data/evidence /data/logs && chown 10001:10001 /data /data/meeting-imports /data/response-evidence /data/evidence /data/logs /models']
+    volumes:
+      - app_data:/data
+      - asr_models:/models
+    logging: *logging
+  db:
+    image: postgres:15-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: shtab_ai
+      POSTGRES_USER: shtab_ai
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      TZ: Asia/Vladivostok
+    secrets: [db_password]
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./database/schema-ubuntu.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U shtab_ai -d shtab_ai']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    mem_limit: 1g
+    cpus: 1.0
+    logging: *logging
+  ollama:
+    image: ollama/ollama:0.34.1
+    restart: unless-stopped
+    environment:
+      OLLAMA_NUM_PARALLEL: '1'
+      OLLAMA_MAX_LOADED_MODELS: '1'
+      OLLAMA_KEEP_ALIVE: '0'
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ['CMD', 'ollama', 'list']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    mem_limit: 5g
+    cpus: 2.0
+    logging: *logging
+  web:
+    <<: *app
+    environment:
+      <<: *env
+      SHTAB_SESSION_COOKIE_SECURE: '1'
+    ports:
+      - '127.0.0.1:${SHTAB_HTTP_PORT:-18092}:8092'
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8092/login',timeout=4); assert r.status == 200"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+    mem_limit: 768m
+    cpus: 0.75
+  meeting-worker:
+    <<: *app
+    command: ['python', '-u', '/installer/worker-loop.py', 'meeting_worker.py']
+    mem_limit: 6g
+    cpus: 2.0
+  llm-worker:
+    <<: *app
+    command: ['python', '-u', '/installer/worker-loop.py', 'llm_worker013.py']
+    mem_limit: 512m
+    cpus: 0.5
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+  brief-worker:
+    <<: *app
+    command: ['python', '-u', '/installer/worker-loop.py', 'brief_worker017.py']
+    mem_limit: 512m
+    cpus: 0.5
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+  asr-download:
+    <<: *app
+    profiles: [setup]
+    restart: 'no'
+    command: ['python', '-u', '/installer/download-asr.py']
+    environment:
+      <<: *env
+      HF_HUB_OFFLINE: '0'
+    volumes:
+      - app_data:/srv/shtab-ai
+      - asr_models:/srv/shtab-ai/response-models
+      - ./scripts:/installer:ro
+    mem_limit: 6g
+    cpus: 2.0
+
+secrets:
+  db_password:
+    file: ./secrets/db_password
+  flask_secret:
+    file: ./secrets/flask_secret
+volumes:
+  db_data:
+  app_data:
+  asr_models:
+  ollama_models:

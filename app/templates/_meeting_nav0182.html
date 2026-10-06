@@ -1,0 +1,8 @@
+{% macro meeting_nav(mid,current='') -%}
+<nav class="meeting-sections" aria-label="Материалы совещания">
+  <a href="{{ url_for('workflow0182.status',mid=mid) }}"{% if current in ('status','brief') %} aria-current="page"{% endif %}>Обзор</a>
+  <a href="{{ url_for('imports.meeting',mid=mid) }}"{% if current=='transcript' %} aria-current="page"{% endif %}>Стенограмма</a>
+  <a href="{{ url_for('meeting_review.drafts',mid=mid) }}"{% if current=='tasks' %} aria-current="page"{% endif %}>Поручения</a>
+  <a href="{{ url_for('imports.export',mid=mid,fmt='zip') }}" download>Скачать ZIP ↓</a>
+</nav>
+{%- endmacro %}

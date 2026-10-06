@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static',filename='ops018.css') }}">
+{% set state_names={'UPLOADING':'Загрузка','QUEUED':'В очереди','FETCHING':'Получение файла','ASSEMBLING':'Сборка записи','CONVERTING':'Подготовка аудио','TRANSCRIBING':'Распознавание','REVIEW':'Стенограмма готова','DUPLICATE':'Дубликат — запись уже обработана','RUNNING':'Выполняется','DONE':'Готово','FAILED':'Ошибка','CANCELLED':'Остановлено','PAUSED':'На паузе','COMPLETED':'Готово','PENDING':'Ожидает'} %}
+<div class="ops-page">
+  <div class="ops-heading"><div><p class="eyebrow">АДМИНИСТРИРОВАНИЕ</p><h1>Фоновые операции</h1></div><a class="button" href="{{ url_for('ops018.page') }}">Обновить</a></div>
+  <section class="panel ops-maintenance {{ 'is-paused' if state.paused else '' }}">
+    <div><h2>{{ 'Обработка приостановлена' if state.paused else 'Обработка разрешена' }}</h2><p class="muted">Пауза действует только на операции этой организации. Текущий этап завершает безопасный участок и останавливается в ближайшей контрольной точке.</p>{% if state.reason %}<p><strong>Причина:</strong> {{ state.reason }}</p>{% endif %}</div>
+    <form method="post" action="{{ url_for('ops018.maintenance') }}" class="ops-maintenance-form"><input type="hidden" name="csrf" value="{{ csrf() }}"><label>Комментарий<input name="reason" maxlength="500" placeholder="Необязательно"></label>{% if state.paused %}<button class="primary" name="action" value="resume">Продолжить всё</button>{% else %}<button name="action" value="pause">Поставить всё на паузу</button>{% endif %}<button class="danger" name="action" value="cancel">Остановить всё</button></form>
+  </section>
+  <section class="panel ops-list">
+    <div class="ops-list-head"><div><h2>Очередь и история</h2><p class="muted">Показаны последние 100 операций организации.</p></div><div class="ops-legend"><span>Пауза сохраняет данные</span><span>Стоп не удаляет источник</span></div></div>
+    {% if rows %}<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Операция</th><th>Состояние</th><th>Прогресс</th><th>Обновлено</th><th>Управление</th></tr></thead><tbody>
+    {% for row in rows %}<tr>
+      <td><strong>{{ {'IMPORT':'Загрузка и распознавание','EXTRACTION':'Черновики поручений','BRIEF':'Бриф'}[row.kind] }}</strong><br><span class="muted">{{ row.label }}</span></td>
+      <td><span class="ops-state state-{{ (row.actual_state or row.status)|lower }}">{{ state_names.get(row.actual_state or row.status,row.actual_state or row.status) }}</span>{% if row.reason %}<br><small>{{ row.reason }}</small>{% endif %}{% if row.error_code %}<br><small class="ops-error">{{ row.error_code }}</small>{% endif %}</td>
+      <td>{% if row.kind=='IMPORT' and row.status=='DUPLICATE' %}Повторное распознавание не запускалось{% elif row.total_chunks %}{{ row.next_chunk }} / {{ row.total_chunks }} фрагм.{% elif row.duration_seconds %}{{ '%.1f'|format(row.processed_seconds or 0) }} / {{ '%.1f'|format(row.duration_seconds) }} с{% elif row.status=='UPLOADING' %}загрузка файла{% else %}—{% endif %}</td>
+      <td>{{ row.updated_at|localtime }}</td>
+      <td class="ops-actions">{% if row.kind=='IMPORT' and row.status=='DUPLICATE' and row.meeting_id %}<a class="button ops-small primary" href="{{ url_for('workflow0182.status',mid=row.meeting_id) }}">Открыть результат</a>{% elif row.status not in ('REVIEW','DUPLICATE','DONE') %}<form method="post" action="{{ url_for('ops018.command',kind=row.kind,entity_id=row.id) }}"><input type="hidden" name="csrf" value="{{ csrf() }}">{% if row.desired_state=='PAUSED' or row.actual_state=='PAUSED' %}<button class="ops-small primary" name="action" value="resume">Продолжить</button>{% else %}<button class="ops-small" name="action" value="pause">Пауза</button>{% endif %}{% if row.status in ('FAILED','CANCELLED') %}<button class="ops-small" name="action" value="retry">Повторить</button>{% else %}<button class="ops-small danger" name="action" value="cancel">Стоп</button>{% endif %}</form>{% endif %}{% if row.kind=='IMPORT' and row.status in ('UPLOADING','FAILED','CANCELLED') %}<form method="post" action="{{ url_for('ops018.discard',entity_id=row.id) }}"><input type="hidden" name="csrf" value="{{ csrf() }}"><button class="ops-small danger-outline">Удалить данные</button></form>{% endif %}</td>
+    </tr>{% endfor %}
+    </tbody></table></div>{% else %}<p class="muted">Операций пока нет.</p>{% endif %}
+  </section>
+  <p class="ops-note">Звонки секретаря здесь не прерываются: это ручные SIP-вызовы, которыми управляет человек в телефонном клиенте.</p>
+</div>
+{% endblock %}

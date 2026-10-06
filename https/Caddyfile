@@ -1,0 +1,10 @@
+{
+	admin off
+	skip_install_trust
+	default_sni {$SHTAB_HTTPS_HOST}
+}
+
+https://{$SHTAB_HTTPS_HOST} {
+	tls internal
+	reverse_proxy web:8092
+}

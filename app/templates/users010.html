@@ -1,0 +1,41 @@
+{% extends 'base.html' %}{% block content %}
+<div class="heading"><div><p class="eyebrow">УЧЁТНЫЕ ЗАПИСИ И КОНТАКТЫ</p><h1>Пользователи</h1><p>Организация: {{ g.user.organization_name }}</p></div></div>
+<p class="muted">Здесь в одной карточке собраны доступ к приложению, роль, телефон и SIP-адрес сотрудника. Добавление контакта не разрешает автоматический обзвон: вызов начинает только секретарь.</p>
+
+<section class="panel"><h2>Создать пользователя</h2><form method="post" action="{{ url_for('user_admin.create') }}"><input type="hidden" name="csrf" value="{{ csrf() }}">
+<label>Сотрудник без учётной записи<select name="person"><option value="">Новый сотрудник — введите имя ниже</option>{% for p in people %}<option value="{{ p.id }}">{{ p.display_name }}</option>{% endfor %}</select></label>
+<label>Имя нового сотрудника<input name="display_name" maxlength="200" autocomplete="off"></label>
+<label>Должность нового сотрудника<input name="role_title" maxlength="200" autocomplete="off" placeholder="Например, главный инженер"></label>
+<p class="muted">Если выбран существующий сотрудник, его должность сохраняется. Изменить её можно в карточке ниже.</p>
+<label>Логин<input name="username" required pattern="[a-z][a-z0-9_-]{2,39}" minlength="3" maxlength="40" autocomplete="off"></label>
+<label>Доступ<select name="role"><option value="secretary">Секретарь</option><option value="head">Руководитель — только просмотр</option></select></label>
+<label>Пароль<input type="password" name="password" required minlength="14" maxlength="200" autocomplete="new-password"></label>
+<label>Повторите пароль<input type="password" name="confirm" required minlength="14" maxlength="200" autocomplete="new-password"></label>
+<button class="primary">Создать</button></form></section>
+
+{% for u in rows %}<section class="panel draft-card" id="person-{{ u.person_id }}">
+<h2>{{ u.display_name }}{% if u.username %} · {{ u.username }}{% endif %}</h2>
+<p>{{ u.role_title or 'Должность не указана' }} · {% if u.user_id %}{{ 'Администратор' if u.is_admin else ('Руководитель' if u.app_role=='head' else 'Секретарь') }} · {{ 'Доступ включён' if u.active and u.person_active else 'Доступ отключён' }}{% else %}без доступа к приложению{% endif %}{% if not u.person_active %} · сотрудник неактивен{% endif %}</p>
+<form method="post" action="{{ url_for('user_admin.position',person_id=u.person_id) }}">
+<input type="hidden" name="csrf" value="{{ csrf() }}">
+<input type="hidden" name="previous_role_title" value="{{ u.role_title or '' }}">
+<div class="actions"><label>Должность<input name="role_title" value="{{ u.role_title or '' }}" maxlength="200" placeholder="Например, главный инженер"></label><button>Сохранить должность</button></div>
+</form>
+
+{% if u.user_id %}
+  {% if not u.is_admin %}<form method="post" action="{{ url_for('user_admin.change',uid=u.user_id) }}"><input type="hidden" name="csrf" value="{{ csrf() }}"><input type="hidden" name="version" value="{{ u.session_version }}"><div class="actions">{% if u.active %}{% if u.user_id|string!=g.user.id|string %}<button name="action" value="disable">Отключить доступ</button>{% endif %}{% else %}<button name="action" value="enable">Включить доступ</button>{% endif %}</div></form><form method="post" action="{{ url_for('user_admin.change',uid=u.user_id) }}"><input type="hidden" name="csrf" value="{{ csrf() }}"><input type="hidden" name="version" value="{{ u.session_version }}"><div class="actions"><label>Роль<select name="action"><option value="secretary" {{ 'selected' if u.app_role=='secretary' }}>Секретарь</option><option value="head" {{ 'selected' if u.app_role=='head' }}>Руководитель — только просмотр</option></select></label><button>Сохранить роль</button></div></form><p><a href="{{ url_for('organizations.transfer_form',uid=u.user_id) }}">Перенести в другую организацию</a></p>{% endif %}
+  <details><summary>Задать новый пароль</summary><form method="post" action="{{ url_for('user_admin.change',uid=u.user_id) }}"><input type="hidden" name="csrf" value="{{ csrf() }}"><input type="hidden" name="version" value="{{ u.session_version }}"><label>Новый пароль<input type="password" name="password" required minlength="14" maxlength="200" autocomplete="new-password"></label><label>Повторите пароль<input type="password" name="confirm" required minlength="14" maxlength="200" autocomplete="new-password"></label><button name="action" value="password">Сохранить пароль и отозвать сеансы</button></form></details>
+{% else %}<p class="muted">Учётную запись можно создать в форме выше, выбрав этого сотрудника.</p>{% endif %}
+
+<h3>Телефоны и SIP</h3>
+{% if u.contacts %}<div class="table-wrap"><table><thead><tr><th>Тип</th><th>Метка</th><th>Номер / адрес</th><th>Приоритет</th><th>Состояние</th></tr></thead><tbody>
+{% for c in u.contacts %}<tr><td>{{ kinds.get(c.kind,c.kind) }}</td><td>{{ c.label }}</td><td><code>{{ c.value }}</code></td><td>{{ c.priority }}</td><td><form method="post" action="{{ url_for('call_assist.contact_state',contact_id=c.id) }}"><input type="hidden" name="csrf" value="{{ csrf() }}"><button name="action" value="{{ 'disable' if c.enabled else 'enable' }}">{{ 'Отключить' if c.enabled else 'Включить' }}</button></form></td></tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="muted">Контакты не добавлены.</p>{% endif %}
+<details><summary>Добавить телефон или SIP-адрес</summary><form method="post" action="{{ url_for('call_assist.contact_add',person_id=u.person_id) }}"><input type="hidden" name="csrf" value="{{ csrf() }}">
+<label>Тип<select name="kind">{% for value,label in kinds.items() %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+<label>Метка<input name="label" value="Рабочий" required maxlength="80"></label>
+<label>Номер или SIP-адрес<input name="value" required maxlength="200" placeholder="215, +7 999 123-45-67 или sip:215"></label>
+<label>Приоритет<input type="number" name="priority" value="1" min="1" max="99"></label>
+<button class="primary">Сохранить контакт</button></form></details>
+</section>{% else %}<div class="panel empty">В организации пока нет пользователей.</div>{% endfor %}
+{% endblock %}

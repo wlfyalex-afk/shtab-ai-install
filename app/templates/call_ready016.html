@@ -1,0 +1,14 @@
+{% extends 'base.html' %}{% block content %}
+<p><a href="{{ url_for('call_assist.calls') }}">← К очереди звонков</a></p>
+<div class="heading"><div><p class="eyebrow">КАРТОЧКА ЗВОНКА</p><h1>{{ row.display_name }}</h1></div></div>
+<section class="panel"><p><strong>{{ row.instruction }}</strong></p><p class="muted">{{ row.title }}</p>
+<p>Контакт: <strong>{{ row.contact_value }}</strong> · {{ row.contact_label }}</p>
+{% if row.status=='PREPARED' %}<p><a class="button primary" href="{{ dial_href }}">Открыть SIP-клиент</a></p>
+<p class="muted">Браузер попросит подтверждение. Вызов начнёт установленный MicroSIP, Linphone или другой обработчик SIP. Произнесите поручение самостоятельно; запись отключена.</p>{% else %}<p class="notice">Результат звонка уже сохранён.</p>{% endif %}</section>
+{% if row.status=='PREPARED' %}<section class="panel"><h2>Результат разговора</h2><form method="post" action="{{ url_for('call_assist.finish',session_id=row.id) }}"><input type="hidden" name="csrf" value="{{ csrf() }}">
+<label>Результат соединения<select name="outcome" required>{% for value,label in outcomes.items() %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+<label>Сообщённый статус поручения<select name="reported_status">{% for value,label in reported.items() %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+<label>Новый срок словами<input name="promised_due_text" maxlength="200" placeholder="Например: к пятнице"></label>
+<label>Комментарий секретаря<textarea name="note" maxlength="2000" rows="5"></textarea></label>
+<button class="primary">Сохранить результат</button></form></section>{% endif %}
+{% endblock %}

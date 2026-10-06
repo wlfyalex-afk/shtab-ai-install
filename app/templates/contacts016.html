@@ -1,0 +1,16 @@
+{% extends 'base.html' %}{% block content %}
+<div class="heading"><div><p class="eyebrow">СПРАВОЧНИК</p><h1>Сотрудники и телефоны</h1></div></div>
+<p class="muted">Контакты принадлежат текущей организации. Добавление номера не разрешает автоматический обзвон: Штаб.AI только передаёт выбранный адрес установленному SIP-клиенту после действия секретаря.</p>
+{% for p in rows %}<section class="panel draft-card" id="person-{{ p.id }}">
+<h2>{{ p.display_name }}</h2><p>{{ p.role_title or 'Должность не указана' }} · {{ 'Активен' if p.active else 'Неактивен' }}</p>
+{% if p.contacts %}<div class="table-wrap"><table><thead><tr><th>Тип</th><th>Метка</th><th>Номер / адрес</th><th>Приоритет</th><th>Состояние</th></tr></thead><tbody>
+{% for c in p.contacts %}<tr><td>{{ kinds.get(c.kind,c.kind) }}</td><td>{{ c.label }}</td><td><code>{{ c.value }}</code></td><td>{{ c.priority }}</td><td><form method="post" action="{{ url_for('call_assist.contact_state',contact_id=c.id) }}"><input type="hidden" name="csrf" value="{{ csrf() }}"><button name="action" value="{{ 'disable' if c.enabled else 'enable' }}">{{ 'Отключить' if c.enabled else 'Включить' }}</button></form></td></tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="muted">Телефоны не добавлены.</p>{% endif %}
+<details><summary>Добавить контакт</summary><form method="post" action="{{ url_for('call_assist.contact_add',person_id=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf() }}">
+<label>Тип<select name="kind">{% for value,label in kinds.items() %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+<label>Метка<input name="label" value="Рабочий" required maxlength="80"></label>
+<label>Номер или SIP-адрес<input name="value" required maxlength="200" placeholder="215, +7 999 123-45-67 или sip:215"></label>
+<label>Приоритет<input type="number" name="priority" value="1" min="1" max="99"></label>
+<button class="primary">Сохранить контакт</button></form></details>
+</section>{% else %}<div class="panel empty">В организации пока нет сотрудников.</div>{% endfor %}
+{% endblock %}

@@ -1,0 +1,19 @@
+<section class="meeting-player cassette-player" aria-label="Проигрыватель записи совещания">
+  <audio id="meeting-audio" preload="metadata" src="{{ url_for('meeting_review.audio',mid=row.id if row is defined else meeting.id) }}"></audio>
+  <div class="cassette-face">
+    <div class="cassette-brand"><strong>BIM-DV</strong><span>MEETING DECK · ШТАБ.AI</span></div>
+    <div class="cassette-window" aria-hidden="true"><i></i><b></b><i></i></div>
+    <output id="audio-clock" class="audio-clock" aria-label="Время записи">00:00 / --:--</output>
+  </div>
+  <div class="cassette-controls">
+    <button type="button" class="deck-key" id="audio-rewind" aria-label="Назад на 10 секунд" title="Назад на 10 секунд">◀◀</button>
+    <button type="button" class="deck-key deck-play" id="audio-toggle" aria-label="Воспроизвести" title="Воспроизвести или приостановить">▶</button>
+    <button type="button" class="deck-key" id="audio-forward" aria-label="Вперёд на 10 секунд" title="Вперёд на 10 секунд">▶▶</button>
+    <label class="audio-position-label"><span class="sr-only">Позиция записи</span><input id="audio-position" type="range" min="0" max="1" value="0" step="0.1"></label>
+    {% if rows is defined %}<label class="deck-setting deck-jump">TASK<select id="audio-draft-nav" aria-label="Перейти к поручению"><option value="">№…</option>{% for d in rows %}<option value="{{ d.id }}" data-target="draft-{{ d.id }}" data-start="{{ d.start_seconds }}" data-end="{{ d.end_seconds }}" title="{{ d.instruction }}">№{{ d.draft_no if d.draft_no is defined else loop.index }}</option>{% endfor %}</select></label>{% endif %}
+    <label class="deck-setting">VOL<input id="audio-volume" type="range" min="0" max="1" value="1" step="0.05" aria-label="Громкость"></label>
+    <label class="deck-setting">SPEED<select id="audio-speed" aria-label="Скорость"><option value="0.75">0,75×</option><option value="1" selected>1×</option><option value="1.25">1,25×</option><option value="1.5">1,5×</option></select></label>
+  </div>
+  <p id="audio-message" class="audio-deck-message" role="status">Выберите «Прослушать» у поручения — добавим по 2 секунды контекста.</p>
+</section>
+<script src="{{ url_for('static',filename='meeting-player009.js') }}" defer></script>

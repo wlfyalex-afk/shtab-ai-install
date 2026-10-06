@@ -1,0 +1,34 @@
+.ops-page { display:grid; gap:28px; }
+.ops-heading,.ops-list-head { display:flex; align-items:center; justify-content:space-between; gap:24px; }
+.ops-heading h1 { margin:.15em 0; }
+.ops-maintenance { display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,420px); gap:32px; border-left:5px solid #168bd2; }
+.ops-maintenance.is-paused { border-left-color:#e59b19; background:#fffaf0; }
+.ops-maintenance h2,.ops-list h2 { margin-top:0; }
+.ops-maintenance-form { display:flex; align-items:end; gap:10px; flex-wrap:wrap; }
+.ops-maintenance-form label { flex:1 0 100%; }
+.ops-maintenance-form input { width:100%; box-sizing:border-box; }
+.ops-maintenance-form .danger,.ops-small.danger { background:#a9382a; border-color:#a9382a; color:#fff; }
+.ops-legend { display:flex; gap:10px; flex-wrap:wrap; }
+.ops-legend span { background:#e7f3fb; color:#07548b; border-radius:999px; padding:6px 10px; font-size:.84rem; }
+.ops-table-wrap { overflow-x:auto; }
+.ops-table { width:100%; border-collapse:collapse; }
+.ops-table th,.ops-table td { text-align:left; vertical-align:top; padding:14px 12px; border-bottom:1px solid #d8e1e8; }
+.ops-table th { color:#31566f; font-size:.82rem; text-transform:uppercase; letter-spacing:.04em; }
+.ops-state { display:inline-block; padding:4px 8px; border-radius:7px; background:#edf3f7; color:#254c67; font-size:.82rem; }
+.state-running { background:#e7f3fb; color:#07548b; }
+.state-paused { background:#fff0c9; color:#815500; }
+.state-cancelled,.state-failed { background:#fde7e3; color:#9a2c1b; }
+.state-completed,.state-done,.state-review { background:#e3f4ec; color:#176a4d; }
+.ops-error { color:#a63624; }
+.ops-actions { min-width:230px; }
+.ops-actions form { display:inline-flex; gap:7px; margin:0 6px 7px 0; }
+.ops-small { padding:7px 10px; white-space:nowrap; }
+.ops-small.danger-outline { color:#9a2c1b; border-color:#d99589; background:#fff; }
+.ops-note { color:#5b6f7d; }
+.eyebrow { color:#31749f; font-weight:700; letter-spacing:.12em; font-size:.78rem; }
+.muted { color:#657986; }
+@media(max-width:900px) {
+  .ops-maintenance { grid-template-columns:1fr; }
+  .ops-maintenance-form { align-items:stretch; flex-direction:column; }
+  .ops-heading,.ops-list-head { align-items:flex-start; flex-direction:column; }
+}

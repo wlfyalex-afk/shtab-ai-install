@@ -1,0 +1,29 @@
+name: shtab-ai-web-dev-test
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp
+    ports:
+      - "127.0.0.1:18092:8092"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Separate test secretary-web.json and database passfile; readable by UID 10001.
+      - type: bind
+        source: ./config
+        target: /etc/shtab-ai
+        read_only: true
+        bind:
+          create_host_path: false
+      # Test imports and audio only. Never point this at production /srv/shtab-ai.
+      - type: bind
+        source: /srv/video/shtab-ai-docker-test/app-data
+        target: /srv/shtab-ai
+        bind:
+          create_host_path: false

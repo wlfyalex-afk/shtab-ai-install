@@ -1,0 +1,5 @@
+{% extends 'base.html' %}{% block content %}
+<p><a href="{{ url_for('head_access.meetings' if is_head() else 'imports.index') }}">← Совещания</a></p>
+<div class="heading"><div><p class="eyebrow">ПЕЧАТНАЯ ФОРМА</p><h1>Отчёт по периоду</h1><p class="muted">Один ZIP содержит PDF, XLSX и стенограммы TXT.</p></div></div>
+<form method="get" action="{{ url_for('reports0184.period') }}" class="panel"><label>Начало периода<input type="date" name="date_from" value="{{ date_from }}" required></label><label>Конец периода<input type="date" name="date_to" value="{{ date_to }}" required></label><button class="primary">Скачать отчёт ZIP</button></form>
+{% endblock %}
