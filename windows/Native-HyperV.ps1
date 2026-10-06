@@ -47,7 +47,13 @@ function Initialize-ShtabHyperV {
     }
     if (-not $VMRoot) { $VMRoot = Join-Path (Get-VMHost).VirtualHardDiskPath $VMName }
     $script:nativeRoot = [IO.Path]::GetFullPath($VMRoot)
-    if (Test-Path -LiteralPath $script:nativeRoot) { throw "VM directory already exists: $script:nativeRoot. Nothing was deleted." }
+    if (Test-Path -LiteralPath $script:nativeRoot) {
+        $rootItem = Get-Item -LiteralPath $script:nativeRoot -Force
+        if (-not $rootItem.PSIsContainer -or ($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -or @(Get-ChildItem -LiteralPath $script:nativeRoot -Force).Count -gt 0) {
+            throw "VM directory contains existing data: $script:nativeRoot. Nothing was changed."
+        }
+        Write-Host 'Continuing preparation in the empty VM directory from the previous attempt.'
+    }
     $script:nativeConnection = Join-Path $env:LOCALAPPDATA "ShtabAI\$VMName"
     $script:nativeKey = Join-Path $script:nativeConnection 'hyperv-ed25519'
     $script:nativeKnownHosts = Join-Path $script:nativeConnection 'known_hosts'
@@ -111,12 +117,21 @@ function New-ShtabHyperV {
         New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress ($script:nativeSubnet + '.1') -PrefixLength 24 | Out-Null
         New-NetNat -Name $switchName -InternalIPInterfaceAddressPrefix ($script:nativeSubnet + '.0/24') | Out-Null
     }
-    New-Item -ItemType Directory -Path $script:nativeRoot | Out-Null
+    New-Item -ItemType Directory -Force -Path $script:nativeRoot | Out-Null
     New-Item -ItemType Directory -Force -Path $script:nativeConnection | Out-Null
-    if (Test-Path $script:nativeKey) { throw 'An SSH key from a previous native installation exists. Nothing was overwritten.' }
-    & $script:keygenPath -q -t ed25519 -f $script:nativeKey -N '""'
-    if ($LASTEXITCODE -ne 0) { throw 'Cannot create the VM SSH key.' }
-    $key = (Get-Content -LiteralPath ($script:nativeKey + '.pub') -Raw).Trim()
+    if (Test-Path -LiteralPath $script:nativeKey) {
+        if (-not (Test-Path -LiteralPath ($script:nativeKey + '.pub'))) { throw 'Existing SSH key has no public key. Nothing was overwritten.' }
+        $key = (& $script:keygenPath -y -P '""' -f $script:nativeKey | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot validate the existing VM SSH key.' }
+        $storedKey = (Get-Content -LiteralPath ($script:nativeKey + '.pub') -Raw).Trim()
+        if ((($key -split '\s+')[0..1] -join ' ') -ne (($storedKey -split '\s+')[0..1] -join ' ')) { throw 'Existing SSH key pair does not match. Nothing was overwritten.' }
+        Write-Host 'Reusing the SSH key from the previous preparation attempt.'
+    } else {
+        if (Test-Path -LiteralPath ($script:nativeKey + '.pub')) { throw 'Existing public SSH key has no private key. Nothing was overwritten.' }
+        & $script:keygenPath -q -t ed25519 -f $script:nativeKey -N '""'
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot create the VM SSH key.' }
+        $key = (Get-Content -LiteralPath ($script:nativeKey + '.pub') -Raw).Trim()
+    }
     # Disable inherited permissions; retain only current administrator and SYSTEM.
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
     & icacls.exe $script:nativeKey /inheritance:r /grant:r "${identity}:(F)" 'SYSTEM:(F)' | Out-Null
@@ -125,10 +140,17 @@ function New-ShtabHyperV {
     $file = 'ubuntu-24.04-server-cloudimg-amd64-azure.vhd.tar.gz'
     $compressed = Join-Path $downloads $file
     Write-Host 'Downloading the official Ubuntu 24.04 Hyper-V disk.'
-    $sums = (Invoke-WebRequest -UseBasicParsing -Uri ($base + 'SHA256SUMS')).Content
-    $matches = @($sums -split "`n" | Where-Object { $_ -match ('^[a-f0-9]{64}\s+\*?' + [regex]::Escape($file) + '\s*$') })
-    if ($matches.Count -ne 1) { throw 'Cannot locate the Ubuntu image SHA256.' }
-    $expected = ($matches[0] -split '\s+')[0]
+    # PowerShell 5.1 may expose text/plain Content as bytes. Download to a file
+    # and explicitly decode UTF-8; do not depend on the response object's type.
+    $checksumFile = Join-Path $downloads ('ubuntu-SHA256SUMS-' + [guid]::NewGuid().ToString('N') + '.txt')
+    try {
+        Invoke-WebRequest -UseBasicParsing -Uri ($base + 'SHA256SUMS') -OutFile $checksumFile
+        $checksumText = [IO.File]::ReadAllText($checksumFile,[Text.Encoding]::UTF8)
+        $checksumPattern = '(?im)^([a-f0-9]{64})[ \t]+\*?' + [regex]::Escape($file) + '[ \t]*\r?$'
+        $checksumEntries = [regex]::Matches($checksumText,$checksumPattern)
+        if ($checksumEntries.Count -ne 1) { throw 'Expected exactly one Ubuntu image SHA256 in the downloaded checksum file.' }
+        $expected = $checksumEntries[0].Groups[1].Value.ToLowerInvariant()
+    } finally { Remove-Item -LiteralPath $checksumFile -Force -ErrorAction SilentlyContinue }
     if (-not (Test-Path $compressed) -or (Get-FileHash -LiteralPath $compressed -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
         Invoke-WebRequest -UseBasicParsing -Uri ($base + $file) -OutFile $compressed
     }
