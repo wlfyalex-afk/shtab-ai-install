@@ -6,21 +6,37 @@
 
 ## Windows: одна команда
 
-Windows 10/11 Pro/Enterprise/Education или Windows Server 2019+, x64.
+Windows 10/11 Pro (включая Pro for Workstations и Pro Education) или Windows Server 2019+, x64.
 Откройте **Windows PowerShell от имени администратора** и вставьте:
 
 ```powershell
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $p = Join-Path $env:TEMP 'Install-ShtabAI.ps1'; Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Install-ShtabAI.ps1' -OutFile $p; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $p
 ```
 
-Установщик сам включает Hyper-V, при необходимости скачивает и устанавливает Multipass
-по официальной ссылке Canonical, скачивает и распаковывает пакет в Downloads, проверяет
-контрольные суммы, создаёт Ubuntu 24.04 LTS и устанавливает всё внутри VM.
-При необходимости перезагрузки повторите ту же команду после перезагрузки.
+Установщик выбирает ветку автоматически:
+
+| Система | Действия |
+| --- | --- |
+| Windows Pro | Включает Hyper-V при необходимости; устанавливает Multipass; создаёт Ubuntu VM. |
+| Windows Server с Hyper-V | Создаёт Ubuntu VM напрямую средствами Hyper-V. Multipass не устанавливает и не запускает. |
+| Windows Server без Hyper-V | Добавляет роль Hyper-V с инструментами управления; после перезагрузки повторная команда продолжает серверную установку. |
+
+Пакет скачивается и распаковывается в Downloads; контрольные суммы проверяются.
+Зависимости и модели Штаб.AI устанавливаются автоматически внутри VM.
+Если Windows требует перезагрузку, сохраните работу, перезагрузитесь и повторите ту же команду.
+
+На Server автоматически добавляется клиент OpenSSH, если он отсутствует. Используется
+единственный существующий внешний коммутатор. Если внешнего коммутатора нет, создаётся
+отдельная внутренняя сеть с NAT; физический адаптер Windows не перенастраивается.
+При нескольких внешних коммутаторах выбор задаётся параметром `-VMSwitchName`.
+По умолчанию диск VM размещается в каталоге дисков Hyper-V; другой каталог можно
+задать через `-VMRoot D:\ShtabAI\shtab-ai-test`.
 
 Нужно **15 GB свободной RAM**. VM получает 4 CPU, 12 GB RAM и диск 120 GB;
 предусмотрите место под виртуальный диск. Windows Home и ARM64 не поддерживаются.
-Совместимость Multipass с Windows Server 2022 проверяется в ходе испытания.
+Серверная ветка реализована; полное испытание на Windows Server ещё не завершено.
+Первый запуск Ubuntu требует доступного DHCP во внешней сети; внутренняя NAT-сеть
+получает адрес автоматически из свободной подсети.
 
 В конце создайте администратора по приглашению установщика. Браузер откроет
 **https://shtab-ai-test.local:8443**. Сертификат добавляется в доверенные текущего
@@ -57,12 +73,23 @@ Multipass. Hyper-V и VM других средств управления сох
 
 ## Диагностика
 
-Windows:
+Windows Pro (Multipass):
 
 ```powershell
 multipass exec shtab-ai-test -- sudo /opt/shtab-ai-021/shtabctl progress
 multipass exec shtab-ai-test -- sudo journalctl -u shtab-ai-install -n 100
 ```
+
+
+Windows Server (Hyper-V):
+
+```powershell
+Get-VM -Name shtab-ai-test
+Get-VMNetworkAdapter -VMName shtab-ai-test | Select-Object -ExpandProperty IPAddresses
+```
+
+Для интерактивной диагностики Ubuntu используйте `vmconnect.exe localhost shtab-ai-test`.
+Если запуск завершился ошибкой, VM и её диск сохраняются; установщик не удаляет их автоматически.
 
 Ubuntu:
 

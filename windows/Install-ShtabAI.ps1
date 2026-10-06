@@ -2,6 +2,7 @@
 #Requires -RunAsAdministrator
 <#
 Create a NEW Ubuntu 24.04 VM using Canonical Multipass and Hyper-V.
+Windows Pro uses Multipass; Windows Server uses native Hyper-V.
 Never deletes an existing VM. First Windows/Hyper-V acceptance test is required.
 #>
 [CmdletBinding()]
@@ -11,6 +12,8 @@ param(
     [ValidateRange(12,128)][int]$MemoryGB = 12,
     [ValidateRange(80,2048)][int]$DiskGB = 120,
     [string]$PackageZip = '',
+    [string]$VMSwitchName = '',
+    [string]$VMRoot = '',
     [ValidateRange(1024,65535)][int]$HTTPSPort = 8443,
     [ValidatePattern('^(main|[a-f0-9]{40})$')][string]$Revision = 'main'
 )
@@ -24,10 +27,11 @@ if (-not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -
 }
 $os = Get-CimInstance Win32_OperatingSystem
 if ([version]$os.Version -lt [version]'10.0.17763') { throw 'Requires Windows 10/11 Pro or Windows Server 2019 or later.' }
-if ($os.ProductType -eq 1 -and $os.OperatingSystemSKU -notin @(4,27,48,49,121,122,125,126,161,162,164,165)) {
-    throw 'Requires a Windows Pro, Enterprise or Education edition. Windows Home is not supported.'
+if ($os.ProductType -eq 1 -and $os.OperatingSystemSKU -notin @(48,49,161,162,164,165)) {
+    throw 'Requires Windows Pro. Windows Home, Enterprise and Education are not supported by this installer.'
 }
-if ($os.ProductType -ne 1) {
+$nativeHyperV = $os.ProductType -ne 1
+if ($nativeHyperV) {
     $feature = Get-WindowsFeature -Name Hyper-V
     if (-not $feature.Installed) {
         $result = Install-WindowsFeature -Name Hyper-V -IncludeManagementTools
@@ -48,6 +52,17 @@ if (-not (Get-CimInstance Win32_ComputerSystem).HypervisorPresent) {
 }
 $ram = (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1048576
 if ($ram -lt ($MemoryGB + 3)) { throw "At least $($MemoryGB + 3) GB of free host RAM is required." }
+function Invoke-ShtabVM {
+    if ($nativeHyperV) { Invoke-ShtabHyperV @args; return }
+    & $mpPath @args
+    if ($LASTEXITCODE -ne 0) { throw "Multipass failed: $($args[0])" }
+}
+if ($nativeHyperV) {
+    Write-Host 'Windows Server detected: using native Hyper-V without Multipass.'
+    $backend = Join-Path $env:TEMP ('Shtab-NativeHyperV-' + [guid]::NewGuid().ToString('N') + '.ps1')
+    Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/$Revision/windows/Native-HyperV.ps1" -OutFile $backend
+    try { . $backend; Initialize-ShtabHyperV } finally { Remove-Item -LiteralPath $backend -Force -ErrorAction SilentlyContinue }
+} else {
 $mp = Get-Command multipass.exe -ErrorAction SilentlyContinue
 $candidate = Join-Path $env:ProgramFiles 'Multipass\bin\multipass.exe'
 if (-not $mp -and (Test-Path $candidate)) { $mp = Get-Item $candidate }
@@ -74,15 +89,12 @@ $service = Get-Service -Name Multipass -ErrorAction SilentlyContinue
 if ($service -and $service.Status -ne 'Running') { Start-Service $service.Name }
 $mpPath = $mp.FullName
 if (-not $mpPath) { $mpPath = $mp.Source }
-function Invoke-Multipass {
-    & $mpPath @args
-    if ($LASTEXITCODE -ne 0) { throw "Multipass failed: $($args[0])" }
-}
-$driver = (Invoke-Multipass get local.driver | Out-String).Trim()
+$driver = (Invoke-ShtabVM get local.driver | Out-String).Trim()
 if ($driver -notin @('hyperv','hcs')) {
     throw "Multipass driver is '$driver'. Choose a Hyper-V driver before running; existing VM settings will not be changed."
 }
-$inventory = (Invoke-Multipass list --format json | Out-String | ConvertFrom-Json)
+}
+$inventory = (Invoke-ShtabVM list --format json | Out-String | ConvertFrom-Json)
 if (@($inventory.list | Where-Object name -eq $VMName).Count -gt 0) {
     throw "VM '$VMName' already exists. Choose a new -VMName; nothing was deleted."
 }
@@ -136,8 +148,8 @@ try {
     $refreshSource = Join-Path $packageRoot 'windows\Refresh-ShtabConnection.ps1'
     if (-not (Test-Path $refreshSource)) { throw 'Package is missing the connection helper.' }
     Write-Host "Creating $VMName : Ubuntu 24.04, $CPUs CPU, $MemoryGB GB RAM, $DiskGB GB disk."
-    Invoke-Multipass launch 24.04 --name $VMName --cpus $CPUs --memory "${MemoryGB}G" --disk "${DiskGB}G" --timeout 900
-    Invoke-Multipass transfer $archive "${VMName}:/home/ubuntu/shtab.zip"
+    Invoke-ShtabVM launch 24.04 --name $VMName --cpus $CPUs --memory "${MemoryGB}G" --disk "${DiskGB}G" --timeout 900
+    Invoke-ShtabVM transfer $archive "${VMName}:/home/ubuntu/shtab.zip"
     # No GitHub credential is transferred to the guest.
     $guestScript = @'
 set -euo pipefail
@@ -156,29 +168,33 @@ bash install.sh __HTTPS_NAME__
     $guestScript = $guestScript.Replace('__HTTPS_NAME__', $httpsName)
     $scriptFile = Join-Path $work 'guest-install.sh'
     [IO.File]::WriteAllText($scriptFile, $guestScript.Replace("`r`n","`n"), (New-Object Text.UTF8Encoding($false)))
-    Invoke-Multipass transfer $scriptFile "${VMName}:/home/ubuntu/guest-install.sh"
-    Invoke-Multipass exec $VMName '--' sudo bash '/home/ubuntu/guest-install.sh'
-    Invoke-Multipass exec $VMName '--' rm '/home/ubuntu/guest-install.sh'
+    Invoke-ShtabVM transfer $scriptFile "${VMName}:/home/ubuntu/guest-install.sh"
+    Invoke-ShtabVM exec $VMName '--' sudo bash '/home/ubuntu/guest-install.sh'
+    Invoke-ShtabVM exec $VMName '--' rm '/home/ubuntu/guest-install.sh'
     Write-Host 'Background installation started. Waiting for completion (up to 2 hours).'
     $deadline = (Get-Date).AddHours(2)
     do {
-        $status = (Invoke-Multipass exec $VMName '--' sudo bash -c 'if [ -f /var/lib/shtab-ai-021/status ]; then cat /var/lib/shtab-ai-021/status; else echo STARTING; fi' | Out-String).Trim()
+        $status = (Invoke-ShtabVM exec $VMName '--' sudo bash -c 'if [ -f /var/lib/shtab-ai-021/status ]; then cat /var/lib/shtab-ai-021/status; else echo STARTING; fi' | Out-String).Trim()
         Write-Host "Shtab.AI: $status"
         if ($status -eq 'READY_FOR_ADMIN') { break }
         if ($status -like 'FAILED*') { throw "Installer failed. Run: multipass exec $VMName '--' sudo journalctl -u shtab-ai-install -n 100" }
         if ((Get-Date) -gt $deadline) { throw "Waiting timed out; installation remains running. Run: multipass exec $VMName '--' sudo /opt/shtab-ai-021/shtabctl progress" }
         Start-Sleep -Seconds 10
     } while ($true)
-    Invoke-Multipass info $VMName
+    Invoke-ShtabVM info $VMName
     # Stable browser URL; a per-user elevated task refreshes the VM IP every minute.
     $connectionDir = Join-Path $env:LOCALAPPDATA "ShtabAI\$VMName"
     New-Item -ItemType Directory -Force $connectionDir | Out-Null
     $refresh = Join-Path $connectionDir 'Refresh-ShtabConnection.ps1'
     Copy-Item $refreshSource $refresh
     Add-Content -LiteralPath $hostsPath -Value ([Environment]::NewLine + '127.0.0.1 ' + $httpsName + ' # ShtabAI ' + $VMName) -Encoding ASCII
-    & $refresh -MultipassPath $mpPath -VMName $VMName -Port $HTTPSPort
-    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw 'Connection setup failed.' }
-    $taskArguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $refresh + '" -MultipassPath "' + $mpPath + '" -VMName ' + $VMName + ' -Port ' + $HTTPSPort
+    if ($nativeHyperV) {
+        & $refresh -Backend HyperV -VMName $VMName -Port $HTTPSPort
+        $taskArguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $refresh + '" -Backend HyperV -VMName ' + $VMName + ' -Port ' + $HTTPSPort
+    } else {
+        & $refresh -MultipassPath $mpPath -VMName $VMName -Port $HTTPSPort
+        $taskArguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $refresh + '" -MultipassPath "' + $mpPath + '" -VMName ' + $VMName + ' -Port ' + $HTTPSPort
+    }
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $taskArguments
     $user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
     $triggers = @(
@@ -188,21 +204,26 @@ bash install.sh __HTTPS_NAME__
     $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew
     Register-ScheduledTask -TaskName "ShtabAI-$VMName-Connection" -Action $action -Trigger $triggers -Principal $principal -Settings $settings | Out-Null
-    $startAction = New-ScheduledTaskAction -Execute $mpPath -Argument "start $VMName"
+    if ($nativeHyperV) {
+        $startAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -Command "Start-VM -Name ' + $VMName + '"')
+    } else {
+        $startAction = New-ScheduledTaskAction -Execute $mpPath -Argument "start $VMName"
+    }
     $startTrigger = New-ScheduledTaskTrigger -AtLogOn -User $user
     $startSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
     Register-ScheduledTask -TaskName "ShtabAI-$VMName-Start" -Action $startAction -Trigger $startTrigger -Principal $principal -Settings $startSettings | Out-Null
-    Invoke-Multipass exec $VMName '--' sudo '/opt/shtab-ai-021/shtabctl' certificate
-    Invoke-Multipass exec $VMName '--' sudo cp '/opt/shtab-ai-021/shtab-ai-root.crt' '/home/ubuntu/shtab-ai-root.crt'
+    Invoke-ShtabVM exec $VMName '--' sudo '/opt/shtab-ai-021/shtabctl' certificate
+    Invoke-ShtabVM exec $VMName '--' sudo cp '/opt/shtab-ai-021/shtab-ai-root.crt' '/home/ubuntu/shtab-ai-root.crt'
     $certificate = Join-Path $connectionDir 'shtab-ai-root.crt'
-    Invoke-Multipass transfer "${VMName}:/home/ubuntu/shtab-ai-root.crt" $certificate
+    Invoke-ShtabVM transfer "${VMName}:/home/ubuntu/shtab-ai-root.crt" $certificate
     Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
     Write-Host 'Create the first Shtab.AI administrator now:'
-    Invoke-Multipass exec $VMName '--' sudo '/opt/shtab-ai-021/shtabctl' bootstrap
+    Invoke-ShtabVM exec $VMName '--' sudo '/opt/shtab-ai-021/shtabctl' bootstrap
     $url = "https://${httpsName}:$HTTPSPort"
     Write-Host "Shtab.AI: $url (the VM IP can change)."
     Start-Process $url
 } finally {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
+
 
