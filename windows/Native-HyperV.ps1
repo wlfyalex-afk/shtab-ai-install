@@ -45,7 +45,7 @@ function Initialize-ShtabHyperV {
             # Network changes happen only when the VM is created, after package checks.
         }
     }
-    if (-not $VMRoot) { $VMRoot = Join-Path (Get-VMHost).VirtualHardDiskPath $VMName }
+    if (-not $VMRoot) { $VMRoot = Join-Path (Join-Path $env:SystemDrive 'ShtabAI') $VMName }
     $script:nativeRoot = [IO.Path]::GetFullPath($VMRoot)
     if (Test-Path -LiteralPath $script:nativeRoot) {
         $rootItem = Get-Item -LiteralPath $script:nativeRoot -Force
@@ -65,12 +65,29 @@ function Get-ShtabHyperVIP {
     return ($addresses | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' -and $_ -notlike '127.*' -and $_ -notlike '169.254.*' } | Select-Object -First 1)
 }
 function Get-ShtabSSHOptions {
-    return @('-i',$script:nativeKey,'-o','BatchMode=yes','-o','ConnectTimeout=5','-o','StrictHostKeyChecking=accept-new','-o',"UserKnownHostsFile=$script:nativeKnownHosts")
+    return @('-F','NUL','-i',$script:nativeKey,'-o','BatchMode=yes','-o','ConnectTimeout=5','-o','StrictHostKeyChecking=accept-new','-o',"UserKnownHostsFile=$script:nativeKnownHosts")
 }
 function ConvertTo-ShtabShellArgument([string]$Value) {
     $quote = [string][char]39
     $escaped = $quote + [char]34 + $quote + [char]34 + $quote
     return $quote + $Value.Replace($quote,$escaped) + $quote
+}
+function Get-ShtabQemuImg([string]$Downloads) {
+    $qemu = Join-Path $env:ProgramFiles 'qemu\qemu-img.exe'
+    if (Test-Path -LiteralPath $qemu) { return $qemu }
+    # Windows binaries linked by qemu.org/download. Pin both version and digest.
+    $name = 'qemu-w64-setup-20260811.exe'
+    $expected = '5bcf9eed634e8575a37b74f445af41a2fe4106da512d0c30c368301d4c105037fdfab40a5287367a28a957624cddebbc8c07e16c88ab6634f554cdf3d16bf543'
+    $setup = Join-Path $Downloads $name
+    Write-Host 'Preparing the QEMU disk converter automatically (VM runs on Hyper-V).'
+    if (-not (Test-Path -LiteralPath $setup) -or (Get-FileHash -LiteralPath $setup -Algorithm SHA512).Hash.ToLowerInvariant() -ne $expected) {
+        Invoke-WebRequest -UseBasicParsing -Uri ('https://qemu.weilnetz.de/w64/' + $name) -OutFile $setup
+    }
+    if ((Get-FileHash -LiteralPath $setup -Algorithm SHA512).Hash.ToLowerInvariant() -ne $expected) { throw 'QEMU installer checksum mismatch.' }
+    # NSIS: /S is silent and /D (last argument, without quotes) selects the directory.
+    $process = Start-Process -FilePath $setup -ArgumentList ('/S /D=' + (Split-Path $qemu)) -Wait -PassThru
+    if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $qemu)) { throw 'Automatic installation of qemu-img failed.' }
+    return $qemu
 }
 function New-ShtabSeedISO([string]$Source, [string]$Destination) {
     if (-not ('ShtabIsoStream' -as [type])) {
@@ -137,9 +154,9 @@ function New-ShtabHyperV {
     & icacls.exe $script:nativeKey /inheritance:r /grant:r "${identity}:(F)" 'SYSTEM:(F)' | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Cannot restrict SSH key permissions.' }
     $base = 'https://cloud-images.ubuntu.com/releases/noble/release/'
-    $file = 'ubuntu-24.04-server-cloudimg-amd64-azure.vhd.tar.gz'
+    $file = 'ubuntu-24.04-server-cloudimg-amd64.img'
     $compressed = Join-Path $downloads $file
-    Write-Host 'Downloading the official Ubuntu 24.04 Hyper-V disk.'
+    Write-Host 'Downloading the standard Ubuntu 24.04 cloud disk (QCOW2, not Azure).'
     # PowerShell 5.1 may expose text/plain Content as bytes. Download to a file
     # and explicitly decode UTF-8; do not depend on the response object's type.
     $checksumFile = Join-Path $downloads ('ubuntu-SHA256SUMS-' + [guid]::NewGuid().ToString('N') + '.txt')
@@ -155,21 +172,27 @@ function New-ShtabHyperV {
         Invoke-WebRequest -UseBasicParsing -Uri ($base + $file) -OutFile $compressed
     }
     if ((Get-FileHash -LiteralPath $compressed -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Ubuntu image checksum mismatch.' }
-    $extract = Join-Path $script:nativeRoot 'image'
-    New-Item -ItemType Directory $extract | Out-Null
-    $tar = Get-Command tar.exe -ErrorAction SilentlyContinue
-    if (-not $tar) { throw 'Windows tar.exe is required to unpack the Canonical disk image.' }
-    $members = @(& $tar.Source -tzf $compressed)
-    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect Ubuntu image archive.' }
-    $vhdMembers = @($members | Where-Object { $_ -match '(^|/)[^/]+\.vhd$' -and $_ -notmatch '(^/|(^|/)\.\.(/|$)|\\|:)' })
-    if ($vhdMembers.Count -ne 1) { throw 'Expected one Ubuntu VHD disk.' }
-    & $tar.Source -xzf $compressed -C $extract $vhdMembers[0]
-    if ($LASTEXITCODE -ne 0) { throw 'Cannot unpack Ubuntu disk.' }
-    $vhd = Join-Path $extract $vhdMembers[0]
+    $qemu = Get-ShtabQemuImg $downloads
+    $imageInfoText = (& $qemu info --output=json -f qcow2 $compressed | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect the Ubuntu QCOW2 disk.' }
+    $imageInfo = $imageInfoText | ConvertFrom-Json
+    if ($imageInfo.'backing-filename' -or $imageInfo.'virtual-size' -gt ($DiskGB * 1073741824)) { throw 'Unexpected Ubuntu disk layout or requested disk too small.' }
     $disk = Join-Path $script:nativeRoot ($VMName + '.vhdx')
-    Convert-VHD -Path $vhd -DestinationPath $disk -VHDType Dynamic
+    $volume = Get-Volume -FilePath $script:nativeRoot -ErrorAction Stop
+    if ($volume.SizeRemaining -lt ([double]$imageInfo.'virtual-size' + 10GB)) { throw 'Not enough free space to convert the Ubuntu disk.' }
+    # Convert directly to VHDX; never pass a sparse archive member to Convert-VHD.
+    Write-Host 'Converting Ubuntu to a dynamic Hyper-V VHDX disk.'
+    & $qemu convert -p -f qcow2 -O vhdx -o subformat=dynamic $compressed $disk
+    if ($LASTEXITCODE -ne 0) { throw 'Ubuntu QCOW2 to VHDX conversion failed.' }
+    # Hyper-V refuses compressed, encrypted or sparse virtual disk files.
+    & compact.exe /U /I $disk | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot clear compression on the VM disk.' }
+    & fsutil.exe sparse setflag $disk 0 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot clear SparseFile on the VM disk.' }
+    $attributes = (Get-Item -LiteralPath $disk).Attributes
+    if ($attributes -band ([IO.FileAttributes]::Compressed -bor [IO.FileAttributes]::Encrypted -bor [IO.FileAttributes]::SparseFile)) { throw 'VM disk still has unsupported file attributes.' }
+    Get-VHD -Path $disk -ErrorAction Stop | Out-Null
     Resize-VHD -Path $disk -SizeBytes ($DiskGB * 1073741824)
-    Remove-Item -LiteralPath $extract -Recurse -Force
     $seed = Join-Path $script:nativeRoot 'seed'
     New-Item -ItemType Directory $seed | Out-Null
     $userData = @"
@@ -189,6 +212,7 @@ packages:
   - linux-cloud-tools-virtual
 runcmd:
   - [systemctl, enable, --now, ssh]
+  - [systemctl, enable, --now, 'getty@tty1.service']
 "@
     $utf8 = New-Object Text.UTF8Encoding($false)
     [IO.File]::WriteAllText((Join-Path $seed 'user-data'),$userData.Replace("`r`n","`n"),$utf8)
@@ -238,7 +262,14 @@ ethernets:
             } finally { $ErrorActionPreference = $savedPreference }
             if ($ready) {
                 & $script:sshPath @options "ubuntu@$script:nativeIP" 'sudo timeout 600 cloud-init status --wait'
-                if ($LASTEXITCODE -notin @(0,2)) { throw 'Ubuntu cloud-init failed. VM preserved for diagnostics.' }
+                if ($LASTEXITCODE -notin @(0,2)) {
+                    & $script:sshPath @options "ubuntu@$script:nativeIP" 'sudo tail -n 80 /var/log/cloud-init-output.log'
+                    throw 'Ubuntu cloud-init failed. VM preserved for diagnostics.'
+                }
+                $cloudStatus = (& $script:sshPath @options "ubuntu@$script:nativeIP" 'cloud-init status --long' | Out-String)
+                if ($LASTEXITCODE -notin @(0,2)) { throw 'Cannot read cloud-init completion status.' }
+                Write-Host $cloudStatus
+                if ($cloudStatus -notmatch 'DataSourceNoCloud') { throw 'Ubuntu did not use the generated NoCloud seed. VM preserved for diagnostics.' }
                 return
             }
         }
@@ -276,3 +307,4 @@ function Invoke-ShtabHyperV {
         default { throw "Unsupported native Hyper-V operation: $operation" }
     }
 }
+

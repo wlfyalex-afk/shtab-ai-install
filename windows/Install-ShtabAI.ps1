@@ -1,8 +1,7 @@
 #Requires -Version 5.1
 #Requires -RunAsAdministrator
 <#
-Create a NEW Ubuntu 24.04 VM using Canonical Multipass and Hyper-V.
-Windows Pro uses Multipass; Windows Server uses native Hyper-V.
+Create a NEW standard Ubuntu 24.04 VM using native Hyper-V on Windows Pro or Server.
 Never deletes an existing VM. First Windows/Hyper-V acceptance test is required.
 #>
 [CmdletBinding()]
@@ -30,8 +29,7 @@ if ([version]$os.Version -lt [version]'10.0.17763') { throw 'Requires Windows 10
 if ($os.ProductType -eq 1 -and $os.OperatingSystemSKU -notin @(48,49,161,162,164,165)) {
     throw 'Requires Windows Pro. Windows Home, Enterprise and Education are not supported by this installer.'
 }
-$nativeHyperV = $os.ProductType -ne 1
-if ($nativeHyperV) {
+if ($os.ProductType -ne 1) {
     $feature = Get-WindowsFeature -Name Hyper-V
     if (-not $feature.Installed) {
         $result = Install-WindowsFeature -Name Hyper-V -IncludeManagementTools
@@ -53,47 +51,12 @@ if (-not (Get-CimInstance Win32_ComputerSystem).HypervisorPresent) {
 $ram = (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1048576
 if ($ram -lt ($MemoryGB + 3)) { throw "At least $($MemoryGB + 3) GB of free host RAM is required." }
 function Invoke-ShtabVM {
-    if ($nativeHyperV) { Invoke-ShtabHyperV @args; return }
-    & $mpPath @args
-    if ($LASTEXITCODE -ne 0) { throw "Multipass failed: $($args[0])" }
+    Invoke-ShtabHyperV @args
 }
-if ($nativeHyperV) {
-    Write-Host 'Windows Server detected: using native Hyper-V without Multipass.'
-    $backend = Join-Path $env:TEMP ('Shtab-NativeHyperV-' + [guid]::NewGuid().ToString('N') + '.ps1')
-    Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/$Revision/windows/Native-HyperV.ps1" -OutFile $backend
-    try { . $backend; Initialize-ShtabHyperV } finally { Remove-Item -LiteralPath $backend -Force -ErrorAction SilentlyContinue }
-} else {
-$mp = Get-Command multipass.exe -ErrorAction SilentlyContinue
-$candidate = Join-Path $env:ProgramFiles 'Multipass\bin\multipass.exe'
-if (-not $mp -and (Test-Path $candidate)) { $mp = Get-Item $candidate }
-if (-not $mp) {
-    Write-Host 'Downloading and installing Canonical Multipass automatically.'
-    $msi = Join-Path $env:TEMP ('multipass-' + [guid]::NewGuid().ToString('N') + '.msi')
-    try {
-        Invoke-WebRequest -UseBasicParsing -Uri 'https://canonical.com/multipass/download/windows' -OutFile $msi
-        $signature = Get-AuthenticodeSignature -LiteralPath $msi
-        if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(?i)(?:^|,\s*)O="?Canonical(?: Group)? (?:Ltd\.?|Limited)"?(?:,|$)') {
-            throw 'Multipass installer must have a valid Canonical digital signature.'
-        }
-        $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList ('/i "' + $msi + '" /qn /norestart') -Wait -PassThru
-        if ($process.ExitCode -notin @(0,3010)) { throw "Multipass installation failed: $($process.ExitCode)." }
-        if ($process.ExitCode -eq 3010) {
-            Write-Host 'Multipass installed. Restart Windows, then repeat the same installation command.'
-            return
-        }
-    } finally { Remove-Item -LiteralPath $msi -Force -ErrorAction SilentlyContinue }
-    if (-not (Test-Path $candidate)) { throw 'Multipass installer did not create multipass.exe.' }
-    $mp = Get-Item $candidate
-}
-$service = Get-Service -Name Multipass -ErrorAction SilentlyContinue
-if ($service -and $service.Status -ne 'Running') { Start-Service $service.Name }
-$mpPath = $mp.FullName
-if (-not $mpPath) { $mpPath = $mp.Source }
-$driver = (Invoke-ShtabVM get local.driver | Out-String).Trim()
-if ($driver -notin @('hyperv','hcs')) {
-    throw "Multipass driver is '$driver'. Choose a Hyper-V driver before running; existing VM settings will not be changed."
-}
-}
+Write-Host 'Using native Hyper-V with a standard Ubuntu cloud image.'
+$backend = Join-Path $env:TEMP ('Shtab-NativeHyperV-' + [guid]::NewGuid().ToString('N') + '.ps1')
+Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/$Revision/windows/Native-HyperV.ps1" -OutFile $backend
+try { . $backend; Initialize-ShtabHyperV } finally { Remove-Item -LiteralPath $backend -Force -ErrorAction SilentlyContinue }
 $inventory = (Invoke-ShtabVM list --format json | Out-String | ConvertFrom-Json)
 if (@($inventory.list | Where-Object name -eq $VMName).Count -gt 0) {
     throw "VM '$VMName' already exists. Choose a new -VMName; nothing was deleted."
@@ -177,8 +140,14 @@ bash install.sh __HTTPS_NAME__
         $status = (Invoke-ShtabVM exec $VMName '--' sudo bash -c 'if [ -f /var/lib/shtab-ai-021/status ]; then cat /var/lib/shtab-ai-021/status; else echo STARTING; fi' | Out-String).Trim()
         Write-Host "Shtab.AI: $status"
         if ($status -eq 'READY_FOR_ADMIN') { break }
-        if ($status -like 'FAILED*') { throw "Installer failed. Run: multipass exec $VMName '--' sudo journalctl -u shtab-ai-install -n 100" }
-        if ((Get-Date) -gt $deadline) { throw "Waiting timed out; installation remains running. Run: multipass exec $VMName '--' sudo /opt/shtab-ai-021/shtabctl progress" }
+        if ($status -like 'FAILED*') {
+            Invoke-ShtabVM exec $VMName '--' sudo journalctl -u shtab-ai-install -n 100 --no-pager
+            throw "Shtab.AI installation failed: $status. VM preserved; diagnostic log printed above."
+        }
+        if ((Get-Date) -gt $deadline) {
+            Invoke-ShtabVM exec $VMName '--' sudo journalctl -u shtab-ai-install -n 100 --no-pager
+            throw 'Waiting timed out; installation remains running. Diagnostic log printed above.'
+        }
         Start-Sleep -Seconds 10
     } while ($true)
     Invoke-ShtabVM info $VMName
@@ -188,13 +157,8 @@ bash install.sh __HTTPS_NAME__
     $refresh = Join-Path $connectionDir 'Refresh-ShtabConnection.ps1'
     Copy-Item $refreshSource $refresh
     Add-Content -LiteralPath $hostsPath -Value ([Environment]::NewLine + '127.0.0.1 ' + $httpsName + ' # ShtabAI ' + $VMName) -Encoding ASCII
-    if ($nativeHyperV) {
-        & $refresh -Backend HyperV -VMName $VMName -Port $HTTPSPort
-        $taskArguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $refresh + '" -Backend HyperV -VMName ' + $VMName + ' -Port ' + $HTTPSPort
-    } else {
-        & $refresh -MultipassPath $mpPath -VMName $VMName -Port $HTTPSPort
-        $taskArguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $refresh + '" -MultipassPath "' + $mpPath + '" -VMName ' + $VMName + ' -Port ' + $HTTPSPort
-    }
+    & $refresh -Backend HyperV -VMName $VMName -Port $HTTPSPort
+    $taskArguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $refresh + '" -Backend HyperV -VMName ' + $VMName + ' -Port ' + $HTTPSPort
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $taskArguments
     $user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
     $triggers = @(
@@ -204,11 +168,7 @@ bash install.sh __HTTPS_NAME__
     $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew
     Register-ScheduledTask -TaskName "ShtabAI-$VMName-Connection" -Action $action -Trigger $triggers -Principal $principal -Settings $settings | Out-Null
-    if ($nativeHyperV) {
-        $startAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -Command "Start-VM -Name ' + $VMName + '"')
-    } else {
-        $startAction = New-ScheduledTaskAction -Execute $mpPath -Argument "start $VMName"
-    }
+    $startAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -Command "Start-VM -Name ' + $VMName + '"')
     $startTrigger = New-ScheduledTaskTrigger -AtLogOn -User $user
     $startSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
     Register-ScheduledTask -TaskName "ShtabAI-$VMName-Start" -Action $startAction -Trigger $startTrigger -Principal $principal -Settings $startSettings | Out-Null
@@ -225,5 +185,6 @@ bash install.sh __HTTPS_NAME__
 } finally {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
+
 
 
