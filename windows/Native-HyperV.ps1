@@ -211,6 +211,9 @@ packages:
   - openssh-server
   - linux-cloud-tools-virtual
 runcmd:
+  # The image kernel can be older than the kernel targeted by the meta-package.
+  # Install tools for the RUNNING kernel before Windows waits for its KVP IP.
+  - [bash, -euxc, 'apt-get install -y "linux-tools-`$(uname -r)" "linux-cloud-tools-`$(uname -r)"; systemctl daemon-reload; udevadm control --reload-rules; udevadm trigger --subsystem-match=misc --action=add; udevadm settle --timeout=30; systemctl restart hv-kvp-daemon; sleep 2; systemctl is-active --quiet hv-kvp-daemon']
   - [systemctl, enable, --now, ssh]
   - [systemctl, enable, --now, 'getty@tty1.service']
 "@
