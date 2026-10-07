@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 #Requires -RunAsAdministrator
 <#
 Create a NEW standard Ubuntu 24.04 VM using native Hyper-V on Windows Pro or Server.
@@ -134,11 +134,37 @@ bash install.sh __HTTPS_NAME__
     Invoke-ShtabVM transfer $scriptFile "${VMName}:/home/ubuntu/guest-install.sh"
     Invoke-ShtabVM exec $VMName '--' sudo bash '/home/ubuntu/guest-install.sh'
     Invoke-ShtabVM exec $VMName '--' rm '/home/ubuntu/guest-install.sh'
-    Write-Host 'Background installation started. Waiting for completion (up to 2 hours).'
+    $stageDescriptions = @{
+        STARTING = 'Запускаем установку Штаб.AI'
+        INSTALLING_DEPENDENCIES = '[1/7] Устанавливаем системные компоненты и Docker'
+        BUILDING_APP = '[2/7] Собираем Штаб.AI: приложение и библиотеки обработки аудио'
+        INITIALIZING_DATABASE = '[3/7] Подготавливаем базу данных и запускаем Ollama'
+        DOWNLOADING_QWEN = '[4/7] Скачиваем модель Qwen 3:4b для анализа текста'
+        DOWNLOADING_WHISPER = '[5/7] Скачиваем и проверяем модель Whisper для распознавания речи'
+        CHECKING_DATABASE_AND_MODELS = '[6/7] Проверяем базу данных, модели и обработчики'
+        STARTING_SERVICES = '[7/7] Запускаем Штаб.AI и проверяем доступность приложения'
+        READY_FOR_ADMIN = 'Компоненты готовы. Следующий шаг — создание администратора'
+    }
+    Write-Host 'Установка Штаб.AI началась. Загрузка моделей и сборка могут занять до двух часов.'
+    Write-Host 'Этапы имеют разную длительность. Показываем текущий этап и время, без приблизительных процентов.'
+    $installStarted = Get-Date
+    $stageStarted = $installStarted
+    $lastStatus = ''
+    $lastReportedAt = [datetime]::MinValue
     $deadline = (Get-Date).AddHours(2)
     do {
         $status = (Invoke-ShtabVM exec $VMName '--' sudo bash -c 'if [ -f /var/lib/shtab-ai-021/status ]; then cat /var/lib/shtab-ai-021/status; else echo STARTING; fi' | Out-String).Trim()
-        Write-Host "Shtab.AI: $status"
+        $now = Get-Date
+        $stageChanged = $status -ne $lastStatus
+        if ($stageChanged) { $stageStarted = $now; $lastStatus = $status }
+        $description = if ($stageDescriptions.ContainsKey($status)) { $stageDescriptions[$status] } else { "Состояние установки: $status" }
+        $stageTime = ($now - $stageStarted).ToString('hh\:mm\:ss')
+        $totalTime = ($now - $installStarted).ToString('hh\:mm\:ss')
+        Write-Progress -Id 1 -Activity 'Установка Штаб.AI' -Status $description -CurrentOperation "Текущий этап: $stageTime. Всего: $totalTime" -PercentComplete -1
+        if ($stageChanged -or ($now - $lastReportedAt).TotalSeconds -ge 60) {
+            Write-Host "Штаб.AI: $description | Этап: $stageTime | Всего: $totalTime"
+            $lastReportedAt = $now
+        }
         if ($status -eq 'READY_FOR_ADMIN') { break }
         if ($status -like 'FAILED*') {
             Invoke-ShtabVM exec $VMName '--' sudo journalctl -u shtab-ai-install -n 100 --no-pager
@@ -150,6 +176,7 @@ bash install.sh __HTTPS_NAME__
         }
         Start-Sleep -Seconds 10
     } while ($true)
+    Write-Progress -Id 1 -Activity 'Установка Штаб.AI' -Completed
     Invoke-ShtabVM info $VMName
     # Stable browser URL; a per-user elevated task refreshes the VM IP every minute.
     $connectionDir = Join-Path $env:LOCALAPPDATA "ShtabAI\$VMName"
@@ -183,6 +210,7 @@ bash install.sh __HTTPS_NAME__
     Write-Host "Shtab.AI: $url (the VM IP can change)."
     Start-Process $url
 } finally {
+    Write-Progress -Id 1 -Activity 'Установка Штаб.AI' -Completed
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
 
