@@ -8,7 +8,7 @@ source /etc/os-release
 [[ $ID == ubuntu && $VERSION_ID == 24.04 && $(uname -m) == x86_64 ]] || {
     echo 'Поддерживается Ubuntu 24.04 LTS amd64.'; exit 1;
 }
-revision=88b6fe419974e83ecf1bad8d5ddbd739174e6725
+revision=70c33aa9a211da84f2d88490b8baf1ead58bad29
 [[ ! -e /opt/shtab-ai-021/installation-created ]] || {
     echo 'Установка уже существует. Этот скрипт предназначен для чистой VM.'; exit 1;
 }
