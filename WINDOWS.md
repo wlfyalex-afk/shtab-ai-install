@@ -10,14 +10,14 @@ Windows 10/11 Pro (включая Pro for Workstations и Pro Education) или 
 Откройте **Windows PowerShell от имени администратора** и вставьте:
 
 ```powershell
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $p = Join-Path $env:TEMP 'Install-ShtabAI.ps1'; Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Install-ShtabAI.ps1' -OutFile $p; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $p
+$p = Join-Path $env:TEMP 'Install-ShtabAI-Windows.ps1'; Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/generic-ubuntu-hyperv/Install-ShtabAI-Windows.ps1' -OutFile $p; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $p
 ```
 
 Установщик выбирает ветку автоматически:
 
 | Система | Действия |
 | --- | --- |
-| Windows Pro | Включает Hyper-V при необходимости; устанавливает Multipass; создаёт Ubuntu VM. |
+| Windows Pro | Включает Hyper-V при необходимости; создаёт Ubuntu VM напрямую средствами Hyper-V. |
 | Windows Server с Hyper-V | Создаёт Ubuntu VM напрямую средствами Hyper-V. Multipass не устанавливает и не запускает. |
 | Windows Server без Hyper-V | Добавляет роль Hyper-V с инструментами управления; после перезагрузки повторная команда продолжает серверную установку. |
 
@@ -38,8 +38,10 @@ Windows 10/11 Pro (включая Pro for Workstations и Pro Education) или 
 Первый запуск Ubuntu требует доступного DHCP во внешней сети; внутренняя NAT-сеть
 получает адрес автоматически из свободной подсети.
 
+После первичной настройки Ubuntu автоматически перезагружается один раз. Установщик ждёт завершения перезагрузки, cloud-init и запуска службы Hyper-V KVP; ручной вход в Ubuntu не нужен.
+
 В конце создайте администратора по приглашению установщика. Браузер откроет
-**https://shtab-ai-test.local:8443**. Сертификат добавляется в доверенные текущего
+**https://shtab-ai.local:8445**. Сертификат добавляется в доверенные текущего
 пользователя Windows. VM запускается при входе в Windows, смена её IP обрабатывается
 раз в минуту. Браузер открывается автоматически в конце установки.
 

@@ -210,12 +210,18 @@ resize_rootfs: true
 packages:
   - openssh-server
   - linux-cloud-tools-virtual
+  - linux-tools-virtual
 runcmd:
-  # The image kernel can be older than the kernel targeted by the meta-package.
-  # Install tools for the RUNNING kernel before Windows waits for its KVP IP.
-  - [bash, -euxc, 'apt-get install -y "linux-tools-`$(uname -r)" "linux-cloud-tools-`$(uname -r)"; systemctl daemon-reload; udevadm control --reload-rules; udevadm trigger --subsystem-match=misc --action=add; udevadm settle --timeout=30; systemctl restart hv-kvp-daemon; sleep 2; systemctl is-active --quiet hv-kvp-daemon']
+  # Enable KVP for the next boot; package installation can replace the kernel.
+  - [systemctl, enable, hv-kvp-daemon]
   - [systemctl, enable, --now, ssh]
   - [systemctl, enable, --now, 'getty@tty1.service']
+  - [bash, -ec, 'cat /proc/sys/kernel/random/boot_id > /var/lib/shtab-hyperv-first-boot']
+power_state:
+  mode: reboot
+  delay: now
+  timeout: 600
+  condition: true
 "@
     $utf8 = New-Object Text.UTF8Encoding($false)
     [IO.File]::WriteAllText((Join-Path $seed 'user-data'),$userData.Replace("`r`n","`n"),$utf8)
@@ -251,8 +257,18 @@ ethernets:
     $bootDisk = Get-VMHardDiskDrive -VM $vm | Select-Object -First 1
     Set-VMFirmware -VM $vm -FirstBootDevice $bootDisk
     Start-VM -VM $vm
-    Write-Host 'Waiting for Ubuntu DHCP and SSH (up to 15 minutes).'
-    $deadline = (Get-Date).AddMinutes(15)
+    Write-Host 'Preparing Ubuntu, rebooting the guest once, then checking Hyper-V integration (up to 25 minutes).'
+    # A static address or an early KVP response must not allow installation before
+    # the planned reboot. Compare guest boot IDs rather than missing a short outage.
+    $readinessProbe = @'
+test -s /var/lib/shtab-hyperv-first-boot || exit 75
+test "$(cat /var/lib/shtab-hyperv-first-boot)" != "$(cat /proc/sys/kernel/random/boot_id)" || exit 75
+cloud-init status --long
+result=$?
+test "$result" -eq 0 || exit "$result"
+systemctl is-active --quiet hv-kvp-daemon || exit 76
+'@
+    $deadline = (Get-Date).AddMinutes(25)
     do {
         $script:nativeIP = Get-ShtabHyperVIP
         if ($script:nativeIP) {
@@ -260,26 +276,27 @@ ethernets:
             $savedPreference = $ErrorActionPreference
             try {
                 $ErrorActionPreference = 'Continue'
-                & $script:sshPath @options "ubuntu@$script:nativeIP" 'true' 2>$null
-                $ready = $LASTEXITCODE -eq 0
+                $cloudStatus = (& $script:sshPath @options "ubuntu@$script:nativeIP" $readinessProbe 2>$null | Out-String)
+                $probeExit = $LASTEXITCODE
             } finally { $ErrorActionPreference = $savedPreference }
-            if ($ready) {
-                & $script:sshPath @options "ubuntu@$script:nativeIP" 'sudo timeout 600 cloud-init status --wait'
-                if ($LASTEXITCODE -notin @(0,2)) {
+            if ($probeExit -in @(1,2)) {
                     & $script:sshPath @options "ubuntu@$script:nativeIP" 'sudo tail -n 80 /var/log/cloud-init-output.log'
                     throw 'Ubuntu cloud-init failed. VM preserved for diagnostics.'
-                }
-                $cloudStatus = (& $script:sshPath @options "ubuntu@$script:nativeIP" 'cloud-init status --long' | Out-String)
-                if ($LASTEXITCODE -notin @(0,2)) { throw 'Cannot read cloud-init completion status.' }
+            }
+            if ($probeExit -eq 0 -and $cloudStatus -match '(?m)^status: done\s*$') {
                 Write-Host $cloudStatus
                 if ($cloudStatus -notmatch 'DataSourceNoCloud') { throw 'Ubuntu did not use the generated NoCloud seed. VM preserved for diagnostics.' }
                 return
             }
         }
-        Write-Host 'Ubuntu is starting; waiting for cloud-init and SSH.'
+        Write-Host 'Waiting for Ubuntu setup, automatic guest reboot, KVP and SSH.'
         Start-Sleep -Seconds 10
     } while ((Get-Date) -lt $deadline)
-    throw "Ubuntu SSH did not become ready. VM and disk preserved. Open Hyper-V console for '$VMName'."
+    if ($script:nativeIP) {
+        $options = Get-ShtabSSHOptions
+        & $script:sshPath @options "ubuntu@$script:nativeIP" 'sudo bash -c "cloud-init status --long; systemctl status hv-kvp-daemon --no-pager -l; tail -n 80 /var/log/cloud-init-output.log"'
+    }
+    throw "Ubuntu did not finish its automatic reboot and KVP/SSH checks in 25 minutes. VM and disk preserved. Open Hyper-V console for '$VMName'."
 }
 function Invoke-ShtabHyperV {
     $operation = $args[0]
@@ -310,4 +327,3 @@ function Invoke-ShtabHyperV {
         default { throw "Unsupported native Hyper-V operation: $operation" }
     }
 }
-

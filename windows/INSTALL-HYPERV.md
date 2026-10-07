@@ -20,6 +20,12 @@ Default storage is C:\ShtabAI\<VMName>, outside Temp. Existing VMs and nonempty 
 
 ## Acceptance status
 
+The first guest boot installs Hyper-V tools, records its boot ID, and schedules one
+cloud-init reboot. The Windows installer waits for a different boot ID, completed
+NoCloud initialization, active KVP and working SSH before transferring the package.
+It tolerates the SSH interruption and IP change during that reboot. The wait is
+bounded to 25 minutes; errors preserve the VM and print diagnostics when SSH is available.
+
 Full acceptance on Windows Server with Hyper-V is still required. This branch is a candidate for testing, not a verified production release. Acceptance requires a fresh install reaching READY_FOR_ADMIN and opening the application successfully.
 
 Sources:
