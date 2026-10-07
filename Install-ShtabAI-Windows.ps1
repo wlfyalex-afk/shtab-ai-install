@@ -21,7 +21,7 @@ try {
     $vmName = 'shtab-ai'
     $vmRoot = Join-Path $env:SystemDrive 'ShtabAI\shtab-ai'
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $revision = '70c33aa9a211da84f2d88490b8baf1ead58bad29'
+    $revision = '9309f87ac1afa6c38faad3516e43134d03fe16d0'
     $expectedHash = 'bc948b974d1a21cd93271adcbaae86fdfc0d34d9cb14d997ffa72a7591540117'
     $workingDirectory = Join-Path $env:TEMP ('ShtabAI-Launcher-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $workingDirectory | Out-Null
