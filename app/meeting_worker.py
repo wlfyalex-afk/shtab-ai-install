@@ -1,4 +1,4 @@
-"""One durable meeting job at a time; CPU Whisper in isolated child process."""
+"""One durable meeting job at a time; Whisper in an isolated child process."""
 import argparse
 import fcntl
 import hashlib
@@ -117,7 +117,7 @@ def transcribe_child(folder):
     cfg=asr_config()
     os.environ['HF_HUB_OFFLINE']='1';os.environ['HF_HUB_DISABLE_TELEMETRY']='1'
     from faster_whisper import WhisperModel
-    model=WhisperModel(cfg['model'],device='cpu',compute_type='int8',cpu_threads=cfg['threads'],
+    model=WhisperModel(cfg['model'],device=os.environ.get('SHTAB_ASR_DEVICE','cpu'),compute_type=os.environ.get('SHTAB_ASR_COMPUTE_TYPE','int8'),cpu_threads=cfg['threads'],
                        num_workers=1,download_root=cfg['cache'],local_files_only=True)
     audio=folder/'audio-16k.wav'
     with wave.open(str(audio),'rb') as f:duration=f.getnframes()/f.getframerate()
@@ -327,7 +327,7 @@ def check(store,load_model=False):
     if load_model:
         os.environ['HF_HUB_OFFLINE']='1';os.environ['HF_HUB_DISABLE_TELEMETRY']='1'
         cfg=asr_config()
-        faster_whisper.WhisperModel(cfg['model'],device='cpu',compute_type='int8',cpu_threads=cfg['threads'],
+        faster_whisper.WhisperModel(cfg['model'],device=os.environ.get('SHTAB_ASR_DEVICE','cpu'),compute_type=os.environ.get('SHTAB_ASR_COMPUTE_TYPE','int8'),cpu_threads=cfg['threads'],
            download_root=cfg['cache'],local_files_only=True)
     emit('meeting_import_check_ok',model=asr_config()['model'],model_loaded=load_model)
 

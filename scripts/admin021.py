@@ -18,7 +18,7 @@ import threading
 import time
 
 ROOT = Path('/opt/shtab-ai-021')
-BACKUPS = Path('/var/backups/shtab-ai-021')
+BACKUPS = Path((ROOT/'backup-directory').read_text().strip()) if (ROOT/'backup-directory').is_file() else Path('/var/backups/shtab-ai-021')
 STATE = Path('/var/lib/shtab-ai-021')
 WRITERS = ('proxy', 'web', 'meeting-worker', 'llm-worker', 'brief-worker')
 PAYLOADS = ('database.dump', 'app-data.tar.gz', 'configuration.tar.gz')
@@ -38,8 +38,15 @@ def command(args, **kwargs):
     return subprocess.run(args, check=True, **kwargs)
 
 
+def compose_command():
+    args = ['docker', 'compose', '-f', str(ROOT/'compose.yaml')]
+    if (ROOT/'compose.gpu.yaml').exists():
+        args += ['-f', str(ROOT/'compose.gpu.yaml')]
+    return args
+
+
 def dc(*args, **kwargs):
-    return command(['docker', 'compose', '-f', str(ROOT/'compose.yaml'), *args], cwd=ROOT, **kwargs)
+    return command([*compose_command(), *args], cwd=ROOT, **kwargs)
 
 
 def sql(statement):
@@ -375,7 +382,7 @@ def destructive(kind, source=None):
                 changed = True
                 dump = source/'database.dump'
                 with Progress('Восстановление PostgreSQL: передача дампа', total=dump.stat().st_size) as progress, dump.open('rb') as f:
-                    transfer_process(['docker', 'compose', '-f', str(ROOT/'compose.yaml'), 'exec', '-T', 'db', 'pg_restore', '-U', 'shtab_ai', '-d', 'shtab_ai', '--clean', '--if-exists', '--no-owner', '--no-acl', '--single-transaction'], source=f, progress=progress)
+                    transfer_process([*compose_command(), 'exec', '-T', 'db', 'pg_restore', '-U', 'shtab_ai', '-d', 'shtab_ai', '--clean', '--if-exists', '--no-owner', '--no-acl', '--single-transaction'], source=f, progress=progress)
                 clear_or_restore_files(source)
                 with Progress('Восстановление сертификатов'):
                     for name in ('tls-data', 'tls-config'):
@@ -383,6 +390,7 @@ def destructive(kind, source=None):
                             if (ROOT/name).exists(): shutil.rmtree(ROOT/name)
                             shutil.copytree(staging/name, ROOT/name)
                             (ROOT/name).chmod(0o700)
+                command(['bash', str(ROOT/'shtabctl'), 'certificate'])
                 print('БД, записи и сохранённый УЦ восстановлены. При смене УЦ обновите доверие на клиентских ПК.')
         else:
             changed = True

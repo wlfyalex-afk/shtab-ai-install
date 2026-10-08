@@ -15,7 +15,7 @@ exec 9>"$state/install.lock"
 flock -n 9 || { echo 'Installer is running; wait for completion'; exit 1; }
 active=$(systemctl show shtab-ai-install.service -p ActiveState --value 2>/dev/null || true)
 [[ $active != activating && $active != active ]] || { echo 'Installation service is running; wait'; exit 1; }
-dc() { docker compose -f compose.yaml "$@"; }
+dc() { bash scripts/dc.sh "$@"; }
 dc config --quiet
 project=$(dc config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')
 [[ $project == shtab-ai-021 ]] || { echo 'Unexpected project; no changes'; exit 1; }

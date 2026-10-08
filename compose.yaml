@@ -1,7 +1,7 @@
 name: shtab-ai-021
 
 x-app: &app
-  image: shtab-ai-021-app:0.21.0-rc2
+  image: shtab-ai-021-app:0.21.0-rc3
   build:
     context: ./app
   restart: unless-stopped
@@ -15,11 +15,11 @@ x-app: &app
     TZ: Asia/Vladivostok
     PYTHONDONTWRITEBYTECODE: '1'
     PYTHONUNBUFFERED: '1'
-    SHTAB_OLLAMA_ENDPOINT: http://ollama:11434
+    SHTAB_OLLAMA_ENDPOINT: ${SHTAB_OLLAMA_ENDPOINT:-http://ollama:11434}
     SHTAB_TRUSTED_HOSTS: ${SHTAB_TRUSTED_HOSTS:-127.0.0.1,localhost}
     MODEL_NAME: /srv/shtab-ai/response-models/turbo
     MODEL_CACHE: /srv/shtab-ai/response-models
-    CPU_THREADS: '2'
+    CPU_THREADS: ${SHTAB_CPU_THREADS:-4}
     HF_HUB_OFFLINE: '1'
     HF_HUB_DISABLE_TELEMETRY: '1'
     OMP_NUM_THREADS: '2'
@@ -44,9 +44,10 @@ services:
     restart: unless-stopped
     environment:
       SHTAB_HTTPS_HOST: ${SHTAB_HTTPS_HOST:?Run configure-https.py first}
+      SHTAB_HTTPS_SITES: ${SHTAB_HTTPS_SITES:?Run configure-https.py first}
     ports:
-      - '${SHTAB_HTTPS_BIND_IP:-0.0.0.0}:443:443'
-      - '${SHTAB_HTTPS_BIND_IP:-0.0.0.0}:80:80'
+      - '${SHTAB_HTTPS_BIND_IP:-0.0.0.0}:${SHTAB_HTTPS_PORT:-443}:443'
+      - '${SHTAB_HTTPS_BIND_IP:-0.0.0.0}:${SHTAB_HTTP_REDIRECT_PORT:-80}:80'
     volumes:
       - ./https/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./tls-data:/data
@@ -86,6 +87,7 @@ services:
     cpus: 1.0
     logging: *logging
   ollama:
+    profiles: [local-llm]
     image: ollama/ollama:0.34.1
     restart: unless-stopped
     environment:
@@ -100,7 +102,7 @@ services:
       timeout: 5s
       retries: 30
     mem_limit: 5g
-    cpus: 2.0
+    cpus: ${SHTAB_LLM_CPUS:-2}
     logging: *logging
   web:
     <<: *app
@@ -120,7 +122,7 @@ services:
     <<: *app
     command: ['python', '-u', '/installer/worker-loop.py', 'meeting_worker.py']
     mem_limit: 6g
-    cpus: 2.0
+    cpus: ${SHTAB_ASR_CPUS:-2}
   llm-worker:
     <<: *app
     command: ['python', '-u', '/installer/worker-loop.py', 'llm_worker013.py']
@@ -129,8 +131,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      ollama:
-        condition: service_healthy
   brief-worker:
     <<: *app
     command: ['python', '-u', '/installer/worker-loop.py', 'brief_worker017.py']
@@ -138,8 +138,6 @@ services:
     cpus: 0.5
     depends_on:
       db:
-        condition: service_healthy
-      ollama:
         condition: service_healthy
   asr-download:
     <<: *app
@@ -154,7 +152,7 @@ services:
       - asr_models:/srv/shtab-ai/response-models
       - ./scripts:/installer:ro
     mem_limit: 6g
-    cpus: 2.0
+    cpus: ${SHTAB_ASR_CPUS:-2}
 
 secrets:
   db_password:

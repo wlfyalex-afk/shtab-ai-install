@@ -210,7 +210,8 @@ def status_page(mid):
             metric_rows = cur.fetchall()
 
     metric = {row["stage"]: _seconds(row["seconds"]) for row in metric_rows}
-    preparation = sum(metric.get(name, 0) for name in ("FETCHING", "VERIFYING", "ASSEMBLING", "PROBING", "CONVERTING", "CONCATENATING"))
+    upload_seconds += metric.get("FETCHING", 0)
+    preparation = sum(metric.get(name, 0) for name in ("VERIFYING", "ASSEMBLING", "PROBING", "CONVERTING", "CONCATENATING"))
     recognition = metric.get("TRANSCRIBING", 0) + metric.get("SAVING", 0)
     import_status = import_job["status"] if import_job else "WAITING"
     source_ready = bool(transcript)

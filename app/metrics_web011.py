@@ -30,6 +30,8 @@ def report(uid):
         for e in events:
             if str(e['import_id'])!=str(p['id']):continue
             elapsed=float(e['elapsed_seconds']);received=e['received_bytes']
+            if e['stage']=='FETCHING' and e['state']=='RUNNING':
+                elapsed=max(elapsed,(now-e['started_at']).total_seconds())
             stages.append(dict(stage=LABELS.get(e['stage'],e['stage']),state=e['state'],elapsed=elapsed,
               received=received if e['stage']=='FETCHING' else None,expected=e['expected_bytes'],
               speed=received/elapsed if elapsed>0 and e['stage']=='FETCHING' else None,

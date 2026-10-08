@@ -1,78 +1,101 @@
-# Штаб.AI — свободная тестовая сборка 0.21
+# Штаб.AI — установка на Windows и Ubuntu
 
-Распознавание аудио совещаний, стенограмма, бриф, поручения и отчёты PDF/XLSX.
-Установка скачивает приложение, зависимости и модели автоматически. GitHub-токен не нужен.
-Сборка предназначена для испытаний; полная проверка установки на чистой Windows ещё не завершена.
+Основной дистрибутив находится в `main`. Пользователю нужны только четыре файла:
 
-## Windows: одна команда
+| ОС | Установка | Полное удаление |
+|---|---|---|
+| Windows Home / Pro | [Install-ShtabAI-Windows.ps1](Install-ShtabAI-Windows.ps1) | [Uninstall-ShtabAI-Windows.ps1](Uninstall-ShtabAI-Windows.ps1) |
+| Ubuntu | [Install-ShtabAI-Ubuntu.sh](Install-ShtabAI-Ubuntu.sh) | [Uninstall-ShtabAI-Ubuntu.sh](Uninstall-ShtabAI-Ubuntu.sh) |
 
-Windows 10/11 Pro/Enterprise/Education или Windows Server 2019+, x64.
-Откройте **Windows PowerShell от имени администратора** и вставьте:
+Установщик предлагает процессор Intel/AMD, NVIDIA или AMD Radeon; локальный доступ или доступ из локальной сети. Затем скачивает компоненты и модели, проверяет их, предлагает создать первого администратора и создаёт ярлыки приложения и диспетчера. Интернет нужен при установке. Модели Qwen3 4B и Whisper large-v3-turbo выполняются на вашем компьютере.
+
+## Требования
+
+- Windows 10 22H2 x64 или Windows 11 x64; рекомендуется Windows 11. Home поддерживается. Не менее 16 ГБ RAM, рекомендуется 24 ГБ; 4 логических ядра, включённая виртуализация, минимум 40 ГБ свободного места. Windows Server не поддерживается.
+- Ubuntu **24.04 LTS x64**, не менее 10 ГБ доступной RAM, 4 ядер и 30 ГиБ свободного места в `/opt`; рекомендуется 16–24 ГБ RAM.
+- Для GPU заранее установите актуальный драйвер производителя. Поддержка зависит от конкретной карты: [матрица Ollama](https://docs.ollama.com/gpu). NVIDIA в Windows должна поддерживать CUDA в WSL. AMD в Ubuntu требует поддерживаемого ROCm-драйвера и доступных `/dev/kfd`, `/dev/dri`.
+- Для GPU рекомендуется 8 ГБ VRAM и более. При нехватке VRAM Ollama может частично использовать CPU; Whisper CUDA может потребовать освобождения памяти. Для неподдерживаемой карты выберите CPU.
+- Запуск требует прав администратора. Компоненты WSL могут потребовать перезагрузку Windows; после неё повторите тот же файл.
+
+Это кандидат для чистого эксперимента: автоматические проверки кода не заменяют установку и обработку записи на реальных Windows/NVIDIA/AMD.
+
+## Windows: один файл
+
+Скачайте установщик по ссылке выше (кнопка **Raw → Save as**), затем в PowerShell:
 
 ```powershell
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $p = Join-Path $env:TEMP 'Install-ShtabAI.ps1'; Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Install-ShtabAI.ps1' -OutFile $p; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $p
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-ShtabAI-Windows.ps1
 ```
 
-Установщик сам включает Hyper-V, при необходимости скачивает и устанавливает Multipass
-по официальной ссылке Canonical, скачивает и распаковывает пакет в Downloads, проверяет
-контрольные суммы, создаёт Ubuntu 24.04 LTS и устанавливает всё внутри VM.
-При необходимости перезагрузки повторите ту же команду после перезагрузки.
+Или скачайте и запустите из PowerShell одной командой:
 
-Нужно **15 GB свободной RAM**. VM получает 4 CPU, 12 GB RAM и диск 120 GB;
-предусмотрите место под виртуальный диск. Windows Home и ARM64 не поддерживаются.
-Совместимость Multipass с Windows Server 2022 проверяется в ходе испытания.
+```powershell
+Invoke-WebRequest -UseBasicParsing https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Install-ShtabAI-Windows.ps1 -OutFile Install-ShtabAI-Windows.ps1; powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-ShtabAI-Windows.ps1
+```
 
-В конце создайте администратора по приглашению установщика. Браузер откроет
-**https://shtab-ai-test.local:8443**. Сертификат добавляется в доверенные текущего
-пользователя Windows. VM запускается при входе в Windows, смена её IP обрабатывается
-раз в минуту. Браузер открывается автоматически в конце установки.
+Будет создан собственный дистрибутив `ShtabAI-021` в WSL2. Docker работает внутри него; Docker Desktop и отдельная Hyper-V VM не нужны. WSL2 использует системную виртуализацию и компонент VirtualMachinePlatform, полный компонент Hyper-V не устанавливается. **Ollama работает нативно в Windows**, отдельно от WSL, и использует выбранный GPU. Установщик не подменяет другую установленную Ollama.
 
-Рабочие VM не удаляются. Повторная установка в уже созданную VM останавливается;
-для ещё одной тестовой VM запустите скачанный скрипт с
-`-VMName shtab-ai-test2 -HTTPSPort 8444`.
+Приложение: `https://localhost:8445/login`. Диспетчер — ярлык `ShtabAI-021-Manager`. В нём доступны запуск/остановка, меню обслуживания, журналы, адрес сети и папка копий. Фоновая задача запускается при загрузке/входе; PowerShell запускается скрыто.
 
-## Ubuntu: одна команда
+Бэкапы: `Документы\ShtabAI-Backups`. Они сохраняются после удаления дистрибутива WSL. Архивы содержат данные и секреты приложения: храните их в защищённом месте.
 
-Чистая **Ubuntu 24.04 LTS amd64**, минимум 4 CPU, 12 GB RAM и 30 GiB свободного
-места в /opt. Команда сама установит загрузчик, если его нет:
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Uninstall-ShtabAI-Windows.ps1
+```
+
+Удаление требует ввода `DELETE ShtabAI-021` и удаляет выбранную установку, модели, данные, задачу, собственные правила сети и ярлыки. Другие дистрибутивы, WSL и драйверы сохраняются. Автоматическая копия при полном удалении не создаётся.
+
+## Ubuntu: один файл
+
+Скачайте установщик и выполните:
 
 ```bash
-sudo bash -c 'set -e; apt-get update; DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl; f=$(mktemp); trap '\''rm -f "$f"'\'' EXIT; curl --fail --location --retry 3 --proto "=https" --proto-redir "=https" https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/bootstrap-linux.sh -o "$f"; bash "$f"'
+bash Install-ShtabAI-Ubuntu.sh
 ```
 
-Установщик дождётся готовности и предложит создать администратора.
-Сертификат добавляется в системное доверие этой Ubuntu; браузеру на другом
-компьютере потребуется сертификат установки. Другие дистрибутивы пока не поддерживаются.
-
-## Откат ручной установки Multipass
-
-PowerShell администратора:
-
-```powershell
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $p = Join-Path $env:TEMP 'Uninstall-Multipass.ps1'; Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Uninstall-Multipass.ps1' -OutFile $p; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $p
-```
-
-Удаление выполняется штатным MSI-деинсталлятором только при пустом списке VM
-Multipass. Hyper-V и VM других средств управления сохраняются.
-
-## Диагностика
-
-Windows:
-
-```powershell
-multipass exec shtab-ai-test -- sudo /opt/shtab-ai-021/shtabctl progress
-multipass exec shtab-ai-test -- sudo journalctl -u shtab-ai-install -n 100
-```
-
-Ubuntu:
+Либо:
 
 ```bash
-sudo /opt/shtab-ai-021/shtabctl progress
-sudo journalctl -u shtab-ai-install -n 100
+curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Install-ShtabAI-Ubuntu.sh -o Install-ShtabAI-Ubuntu.sh
+bash Install-ShtabAI-Ubuntu.sh
 ```
 
-## Лицензия
+Все сервисы, включая Ollama, работают в Docker. NVIDIA Container Toolkit устанавливается автоматически при выборе NVIDIA. Установщик не перезапускает Docker с чужими работающими контейнерами ради настройки GPU: в таком случае сначала подготовьте Toolkit. Драйвер видеокарты автоматически не заменяется.
 
-Наш код этой тестовой сборки распространяется по MIT. Сторонние компоненты,
-шрифты и скачиваемые модели сохраняют собственные лицензии. Будущие версии
-и новые функции могут распространяться на других условиях.
+Приложение: `https://localhost/login` при локальном режиме или `https://<IPv4 компьютера>/login` при сетевом. Ярлыки `ShtabAI` и `ShtabAI-Manager` создаются на рабочем столе пользователя, запустившего `sudo`; на машине без рабочего стола используйте `sudo /opt/shtab-ai-021/shtabctl menu`. GNOME может предложить разрешить запуск ярлыка.
+
+Копии: `/var/backups/shtab-ai-021`. Диспетчер проверяет контрольные суммы, предлагает копию по номеру или пути, перед восстановлением создаёт страховочную копию. Восстановление переносит данные в текущую установку, сохраняя её сетевые настройки и секреты. Для переноса между ОС скопируйте каталог резервной копии в новую папку копий.
+
+```bash
+bash Uninstall-ShtabAI-Ubuntu.sh
+```
+
+Подтверждение: `DELETE-SHTAB-021`. Удаляются контейнеры, данные и модели именно проекта `shtab-ai-021`; копии, Docker и драйверы сохраняются.
+
+## Ускорение
+
+| Выбор | Windows | Ubuntu |
+|---|---|---|
+| CPU Intel/AMD | Нативная Ollama + Whisper CPU в WSL | Ollama CPU + Whisper CPU |
+| NVIDIA | Нативная Ollama GPU + Whisper CUDA в WSL | Ollama GPU + Whisper CUDA |
+| AMD Radeon | Нативная Ollama ROCm + Whisper CPU | Ollama ROCm + Whisper CPU |
+
+Whisper использует faster-whisper/CTranslate2: этот движок поддерживает CUDA и CPU, поэтому AMD ускоряет языковую модель, а распознавание работает на CPU. ASIC исключены; Intel GPU и экспериментальный Vulkan не заявлены в этом дистрибутиве. Используются доступные процессорные ядра, GPU-режим проверяется реальным коротким запросом: если Ollama целиком осталась на CPU, установка выдаёт ошибку, а не сообщает об успешном GPU-ускорении.
+
+## Доступ по сети
+
+При выборе сети укажите активный IPv4 интерфейс. **Закрепите этот адрес в DHCP/роутере либо назначьте статический**: ярлыки, сертификат и правила используют выбранный адрес. При смене адреса потребуется перенастройка или чистая переустановка.
+
+- Windows: входящий TCP 8445 разрешается из LocalSubnet для Private/Domain сети, проксируется в собственный WSL. Public сеть автоматически не переключается. Адрес WSL обновляется диспетчером при перезапуске.
+- Ubuntu: TCP 443 и 80 публикуются только на выбранном IPv4; отдельная цепочка DOCKER-USER ограничивает источники выбранной подсетью, учитывая обход UFW опубликованными Docker-портами.
+- PostgreSQL и API Ollama не публикуются в LAN. API нативной Windows Ollama разрешён только адресу собственного WSL.
+- На каждом клиентском ПК импортируйте **публичный** `shtab-ai-root.crt` в доверенные корневые сертификаты. В Windows диспетчер показывает его путь; в Ubuntu — `/opt/shtab-ai-021/shtab-ai-root.crt`. Не передавайте `tls-data` или закрытые ключи.
+- В установке проверяются HTTPS, сертификат и страница входа. Затем обязательно откройте URL с другого ПК и загрузите тестовую запись: локальная проверка не проверяет клиентские браузеры, межсетевые экраны и маршрутизаторы.
+
+## Прогресс и проверка дистрибутива
+
+Загрузка с Яндекс.Диска показывает прошедшее время ещё до первого полученного блока, затем скорость и оценку остатка. Сервер сообщает время текущей попытки и задержку heartbeat. Итоговая таблица относит `FETCHING` к загрузке, без двойного учёта в подготовке.
+
+Установщики фиксируют SHA `main` перед скачиванием пакета и проверяют `SHA256SUMS`; Ubuntu-образ и нативные архивы Ollama также проверяются. Эти суммы проверяют целостность скачанного пакета, а не независимую подпись издателя.
+
+Для разработки: `python -m unittest discover -s tests`, Bash/JavaScript синтаксис и PowerShell AST проверяются в GitHub Actions. Внутренние `install.sh`, `uninstall.sh`, `scripts/` и `windows/` обслуживают четыре публичных скрипта; запускать их отдельно пользователю не требуется.

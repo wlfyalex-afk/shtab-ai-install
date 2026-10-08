@@ -5,7 +5,7 @@ import math
 import os
 import shutil
 import uuid
-from datetime import datetime
+from datetime import datetime,timezone
 from zoneinfo import ZoneInfo
 from flask import Blueprint,abort,current_app,g,jsonify,render_template,request,redirect,url_for,Response
 from psycopg2.extras import Json
@@ -145,7 +145,16 @@ def state(uid):
         row=get_row(cur,uid)
         cur.execute('SELECT part_no,sha256 FROM meeting_import_chunks WHERE import_id=%s ORDER BY part_no',(str(uid),))
         chunks=cur.fetchall()
-    return jsonify(**public(row),chunks={str(x['part_no']):x['sha256'].strip() for x in chunks})
+        timing={}
+        if row['status']=='FETCHING':
+            cur.execute("SELECT id,started_at,heartbeat_at,state,elapsed_seconds FROM meeting_import_metrics WHERE import_id=%s AND stage='FETCHING' ORDER BY started_at DESC,id DESC LIMIT 1",(str(uid),))
+            event=cur.fetchone()
+            if event:
+                now=datetime.now(timezone.utc)
+                timing=dict(download_run_id=str(event['id']),
+                  download_elapsed_seconds=max(0,(now-event['started_at']).total_seconds()) if event['state']=='RUNNING' else float(event['elapsed_seconds']),
+                  download_stale=event['state']!='RUNNING' or (now-event['heartbeat_at']).total_seconds()>30)
+    return jsonify(**public(row),**timing,chunks={str(x['part_no']):x['sha256'].strip() for x in chunks})
 
 @bp.post('/meetings/uploads/<uuid:uid>/chunks/<int:index>')
 def chunk(uid,index):

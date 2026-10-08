@@ -36,8 +36,9 @@ def configure(root, requested=''):
     trusted = values.get('SHTAB_TRUSTED_HOSTS', '127.0.0.1,localhost').split(',')
     values['SHTAB_TRUSTED_HOSTS'] = ','.join(dict.fromkeys(trusted + [host]))
     values['SHTAB_HTTPS_HOST'] = host
+    values['SHTAB_HTTPS_SITES'] = 'https://' + host + (', https://localhost' if host != 'localhost' else '')
     values.setdefault('SHTAB_HTTPS_BIND_IP', '0.0.0.0')
-    changed = {'SHTAB_TRUSTED_HOSTS', 'SHTAB_HTTPS_HOST', 'SHTAB_HTTPS_BIND_IP'}
+    changed = {'SHTAB_TRUSTED_HOSTS', 'SHTAB_HTTPS_HOST', 'SHTAB_HTTPS_BIND_IP', 'SHTAB_HTTPS_SITES'}
     output = [line for line in lines if line.split('=', 1)[0] not in changed]
     output += [f'{key}={values[key]}' for key in sorted(changed)]
     temp = root / '.env.https.tmp'

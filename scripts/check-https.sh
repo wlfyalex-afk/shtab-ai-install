@@ -2,15 +2,17 @@
 set -euo pipefail
 cd /opt/shtab-ai-021
 host=$(sed -n 's/^SHTAB_HTTPS_HOST=//p' .env)
-bind=$(sed -n 's/^SHTAB_HTTPS_BIND_IP=//p' .env)
+bind=$(sed -n 's/^SHTAB_HTTPS_BIND_IP=//p' .env | tail -1)
+port=$(sed -n 's/^SHTAB_HTTPS_PORT=//p' .env | tail -1)
+port=${port:-443}
 [[ -n $host ]] || { echo 'HTTPS не настроен: в .env нет SHTAB_HTTPS_HOST.'; exit 1; }
 # Use the actual published interface; wildcard binds are reachable via loopback.
 target=${bind:-127.0.0.1}
 [[ $target != 0.0.0.0 ]] || target=127.0.0.1
 ca=tls-data/caddy/pki/authorities/local/root.crt
 echo "Проверка HTTPS: https://$host/login"
-echo "Проверяем на этой VM: $target:443; сертификат и страницу входа."
-dc() { docker compose -f compose.yaml "$@"; }
+echo "Проверяем локально: $target:$port; сертификат и страницу входа."
+dc() { bash scripts/dc.sh "$@"; }
 if ! running=$(dc ps --services --status running); then
     echo 'Не удалось получить статус сервисов Docker. Проверьте пункт 1.'; exit 1
 fi
@@ -30,7 +32,7 @@ for attempt in {1..5}; do
         echo 'ожидаем выпуска корневого сертификата сервисом proxy.'
         last_code=60
     elif curl --silent --show-error --fail --connect-timeout 2 --max-time 5 \
-        --noproxy '*' --cacert "$ca" --connect-to "$host:443:$target:443" \
+        --noproxy '*' --cacert "$ca" --connect-to "$host:443:$target:$port" \
         "https://$host/login" -o /dev/null 2>"$err"; then
         echo 'страница входа доступна, сертификат проверен.'
         install -m 0644 "$ca" shtab-ai-root.crt

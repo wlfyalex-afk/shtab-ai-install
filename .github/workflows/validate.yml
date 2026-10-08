@@ -1,0 +1,38 @@
+name: Validate distribution
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install Flask psycopg2-binary PyYAML
+      - run: python -m unittest discover -s tests
+      - run: find . -name '*.sh' -not -path './.git/*' -print0 | xargs -0 -n1 bash -n
+      - run: node --check app/static/import-status008.js
+      - run: sha256sum --quiet -c SHA256SUMS
+      - name: Validate Compose in all acceleration modes
+        run: |
+          mkdir -p secrets
+          printf 'validation' > secrets/db_password
+          printf 'validation' > secrets/flask_secret
+          printf 'SHTAB_HTTPS_HOST=localhost\nSHTAB_HTTPS_SITES=https://localhost\n' > .env
+          for mode in cpu nvidia amd; do
+            python scripts/configure-acceleration.py . "$mode"
+            bash scripts/dc.sh config --quiet
+          done
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse scripts using Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$parseErrors)
+            if ($parseErrors.Count) { $parseErrors | Format-List; throw "Parse failed: $($_.FullName)" }
+          }

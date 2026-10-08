@@ -113,8 +113,9 @@ class MaintenanceTests(unittest.TestCase):
         source = self.snapshot()
         (self.m.ROOT/'tls-data/root.crt').write_text('different-ca')
         self.calls=[]
-        with patch('builtins.input',return_value='RESTORE-SHTAB-021'), patch.object(self.m,'ensure_idle'), patch.object(self.m,'dc',self.dc), patch.object(self.m,'transfer_process',self.transfer_dc), patch.object(self.m,'make_backup',return_value=self.base/'safety'), patch.object(self.m,'clear_or_restore_files') as files:
+        with patch('builtins.input',return_value='RESTORE-SHTAB-021'), patch.object(self.m,'ensure_idle'), patch.object(self.m,'dc',self.dc), patch.object(self.m,'transfer_process',self.transfer_dc), patch.object(self.m,'make_backup',return_value=self.base/'safety'), patch.object(self.m,'clear_or_restore_files') as files, patch.object(self.m,'command') as certificate:
             self.m.destructive('restore',source)
+        certificate.assert_called_once_with(['bash',str(self.m.ROOT/'shtabctl'),'certificate'])
         files.assert_called_once_with(source)
         self.assertEqual((self.m.ROOT/'tls-data/root.crt').read_text(),'ca-preserved')
         self.assertEqual((self.m.ROOT/'secrets/db_password').read_text(),'current-secret')

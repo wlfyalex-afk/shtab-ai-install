@@ -2,7 +2,7 @@
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Run with sudo'; exit 1; }
 cd /opt/shtab-ai-021
-dc() { docker compose -f compose.yaml "$@"; }
+dc() { bash scripts/dc.sh "$@"; }
 action=${1:-}
 if [[ -z $action ]]; then
     if [[ -t 0 ]]; then action=menu; else action=status; fi
@@ -19,7 +19,11 @@ status)
     ;;
 https-check) bash scripts/check-https.sh ;;
 certificate)
+    owned_ca=false
+    system_ca=/usr/local/share/ca-certificates/shtab-ai-021.crt
+    if [[ -f $system_ca && -f shtab-ai-root.crt ]] && cmp -s "$system_ca" shtab-ai-root.crt; then owned_ca=true; fi
     install -m 0644 tls-data/caddy/pki/authorities/local/root.crt shtab-ai-root.crt
+    if $owned_ca; then install -m 0644 shtab-ai-root.crt "$system_ca"; update-ca-certificates; fi
     openssl x509 -in shtab-ai-root.crt -noout -fingerprint -sha256
     echo "Public root certificate: /opt/shtab-ai-021/shtab-ai-root.crt"
     ;;
@@ -39,6 +43,8 @@ check)
     dc exec -T web python check01845.py
     ;;
 stop) dc stop proxy web meeting-worker llm-worker brief-worker ollama ;;
-start) dc up -d --wait --wait-timeout 240 web meeting-worker llm-worker brief-worker proxy ;;
+start)
+    if ! grep -q '^SHTAB_OLLAMA_ENDPOINT=' .env; then dc up -d --wait --wait-timeout 240 ollama; fi
+    dc up -d --wait --wait-timeout 240 web meeting-worker llm-worker brief-worker proxy ;;
 *) echo 'Commands: menu, backup, backups, restore, reset-db, uninstall, certificate, https-check, status, progress, diagnose, logs, resume, bootstrap, check, stop, start'; exit 2 ;;
 esac

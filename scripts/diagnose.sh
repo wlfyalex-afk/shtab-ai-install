@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd /opt/shtab-ai-021
-dc() { docker compose -f compose.yaml "$@"; }
+dc() { bash scripts/dc.sh "$@"; }
 echo '=== VM memory ==='
 free -h
 echo '=== Containers ==='

@@ -76,6 +76,10 @@ MENU
       12) args=(https-check) ;;
       13) args=(certificate) ;;
       14)
+        if [[ -f /opt/shtab-ai-021/windows-acceleration ]]; then
+            echo 'Для полного удаления используйте Uninstall-ShtabAI-Windows.ps1 в Windows. Копии на диске Windows сохранятся.'
+            continue
+        fi
         echo '1 — удалить контейнеры, сохранить данные и конфигурацию'
         echo '2 — новая пустая установка, сохранить скачанные модели'
         echo '3 — удалить данные и скачанные модели'

@@ -7,6 +7,9 @@ ENV HOME=/tmp HF_HOME=/tmp/huggingface XDG_CACHE_HOME=/tmp/.cache
 
 COPY installed-requirements.txt ./
 RUN python -m pip install --no-cache-dir --disable-pip-version-check -r installed-requirements.txt
+ARG INSTALL_CUDA=0
+RUN if [ "$INSTALL_CUDA" = 1 ]; then python -m pip install --no-cache-dir 'nvidia-cublas-cu12>=12,<13' 'nvidia-cudnn-cu12>=9,<10'; fi
+ENV LD_LIBRARY_PATH=/usr/local/lib/python3.11/site-packages/nvidia/cublas/lib:/usr/local/lib/python3.11/site-packages/nvidia/cudnn/lib
 
 COPY *.py ./
 COPY templates ./templates

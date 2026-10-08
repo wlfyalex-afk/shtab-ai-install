@@ -24,7 +24,7 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(s[name]['image'], s['web']['image'])
             self.assertIn('app_data:/srv/shtab-ai', s[name]['volumes'])
             self.assertIn('asr_models:/srv/shtab-ai/response-models:ro', s[name]['volumes'])
-            self.assertEqual(s[name]['environment']['SHTAB_OLLAMA_ENDPOINT'], 'http://ollama:11434')
+            self.assertEqual(s[name]['environment']['SHTAB_OLLAMA_ENDPOINT'], '${SHTAB_OLLAMA_ENDPOINT:-http://ollama:11434}')
         self.assertEqual(s['asr-download']['environment']['HF_HUB_OFFLINE'], '0')
         self.assertIn('asr_models:/srv/shtab-ai/response-models', s['asr-download']['volumes'])
         self.assertNotIn('ollama-bridge', s)

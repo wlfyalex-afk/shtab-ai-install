@@ -40,6 +40,8 @@ class MenuTests(unittest.TestCase):
             self.assertFalse(self.calls.exists())
 
     def test_https_stopped_and_success_and_failure(self):
+        (self.base/'scripts').mkdir()
+        (self.base/'scripts/dc.sh').write_text((ROOT/'scripts/dc.sh').read_text())
         scripts = self.base/'bin'; scripts.mkdir()
         env = dict(self.env, PATH=str(scripts)+':'+os.environ['PATH'])
         (self.base/'.env').write_text('SHTAB_HTTPS_HOST=192.168.10.134\nSHTAB_HTTPS_BIND_IP=0.0.0.0\n')

@@ -4,7 +4,7 @@
 	default_sni {$SHTAB_HTTPS_HOST}
 }
 
-https://{$SHTAB_HTTPS_HOST} {
+{$SHTAB_HTTPS_SITES} {
 	tls internal
 	reverse_proxy web:8092
 }
