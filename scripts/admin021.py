@@ -39,7 +39,11 @@ def command(args, **kwargs):
 
 
 def compose_command():
+    if (ROOT/'storage.json').exists():
+        command(['python3', str(ROOT/'scripts/configure-storage.py'), 'verify'], stdout=subprocess.DEVNULL)
     args = ['docker', 'compose', '-f', str(ROOT/'compose.yaml')]
+    if (ROOT/'compose.storage.yaml').exists():
+        args += ['-f', str(ROOT/'compose.storage.yaml')]
     if (ROOT/'compose.gpu.yaml').exists():
         args += ['-f', str(ROOT/'compose.gpu.yaml')]
     return args

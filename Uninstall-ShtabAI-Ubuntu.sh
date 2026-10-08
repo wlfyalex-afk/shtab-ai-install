@@ -3,8 +3,25 @@
 set -euo pipefail
 if [[ $EUID -ne 0 ]]; then exec sudo bash "$(readlink -f "${BASH_SOURCE[0]}")" "$@"; fi
 root=/opt/shtab-ai-021
+self=$(readlink -f "${BASH_SOURCE[0]}")
+# The manager may run this file from the mount being removed. Release its open script descriptor first.
+if [[ $self == "$root/"* ]]; then
+    temporary=$(mktemp /var/tmp/shtab-remove.XXXXXX.sh)
+    cp "$self" "$temporary"
+    cd /
+    exec bash "$temporary" "$@"
+fi
+[[ $self != /var/tmp/shtab-remove.*.sh ]] || trap 'rm -f "$self"' EXIT
+cd /
 if [[ ! -d $root ]]; then echo 'Штаб.AI не установлен.'; exit 0; fi
-[[ ! -L $root && -f $root/installation-created && -f $root/compose.yaml ]] || { echo 'Не удалось подтвердить принадлежность каталога. Ничего не удалено.'; exit 1; }
+[[ ! -L $root && ( -f $root/installation-created || -f $root/storage.json ) ]] || { echo 'Не удалось подтвердить принадлежность каталога. Ничего не удалено.'; exit 1; }
+selected=$root
+mount_unit=''
+if [[ -f $root/storage.json ]]; then
+    python3 "$root/scripts/configure-storage.py" verify
+    selected=$(python3 -c 'import json; print(json.load(open("/opt/shtab-ai-021/storage.json"))["root"])')
+    mount_unit=$(python3 -c 'import json; print(json.load(open("/opt/shtab-ai-021/storage.json"))["mount_unit"])')
+fi
 if find "$root" -type l -print -quit | read -r _; then echo 'В каталоге есть символические ссылки. Автоматическое удаление остановлено.'; exit 1; fi
 volumes=()
 if command -v docker >/dev/null && ! docker info >/dev/null 2>&1; then
@@ -19,14 +36,14 @@ if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
             volumes+=("$name")
         fi
     done
-    bash "$root/scripts/dc.sh" config --quiet
+    if [[ -f $root/compose.yaml ]]; then bash "$root/scripts/dc.sh" config --quiet; fi
 fi
 echo 'Будут удалены Штаб.AI, пользователи, записи, результаты и скачанные модели. Резервная копия не создаётся.'
 read -r -p 'Для полного удаления введите DELETE-SHTAB-021: ' answer
 [[ $answer == DELETE-SHTAB-021 ]] || { echo 'Отменено.'; exit 0; }
 systemctl stop shtab-ai-install.service 2>/dev/null || true
 if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
-    bash "$root/scripts/dc.sh" down --remove-orphans
+    if [[ -f $root/compose.yaml ]]; then bash "$root/scripts/dc.sh" down --remove-orphans; fi
     if [[ ${#volumes[@]} -gt 0 ]]; then docker volume rm "${volumes[@]}"; fi
     # Remove only the application image when no remaining container references it.
     for image in shtab-ai-021-app:0.21.0-rc3 shtab-ai-021-app:0.21.0-rc3-nvidia; do
@@ -62,5 +79,17 @@ if [[ -f $certificate && -f $root/shtab-ai-root.crt ]] && cmp -s "$certificate" 
     rm -f "$certificate"
     update-ca-certificates
 fi
-rm -rf -- /opt/shtab-ai-021 /var/lib/shtab-ai-021
+if [[ -n $mount_unit ]]; then
+    expected_unit=$(systemd-escape -p --suffix=mount "$root")
+    [[ $mount_unit == "$expected_unit" ]] || { echo 'Неожиданная mount unit; удаление остановлено.'; exit 1; }
+    systemctl disable --now "$mount_unit"
+    rm -f "/etc/systemd/system/$mount_unit"
+    systemctl daemon-reload
+    rmdir "$root"
+    [[ -f $selected/storage.json && -d $selected/storage ]] || { echo 'Нельзя подтвердить каталог данных после отключения mount.'; exit 1; }
+    rm -rf -- "$selected"
+else
+    rm -rf -- /opt/shtab-ai-021
+fi
+rm -rf -- /var/lib/shtab-ai-021
 echo 'Штаб.AI полностью удалён. Docker, драйверы, другие приложения и ранее созданные резервные копии сохранены.'

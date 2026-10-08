@@ -25,6 +25,18 @@ try {
                 }
             }
         }
+        foreach ($index in Get-ChildItem $base -File -Filter 'ShtabAI-*.json') {
+            $record=Get-Content $index.FullName -Raw | ConvertFrom-Json
+            if ($record.Product -eq 'ShtabAI' -and $record.Backend -eq 'WSL2' -and $record.DistroName -match '^ShtabAI-[A-Za-z0-9-]+$' -and $index.BaseName -eq $record.DistroName) {
+                $file=Join-Path $record.Root 'installation.json'
+                if (-not (Test-Path $file)) { throw ('Installation is unavailable: '+$record.Root+'. Connect the installation drive and retry.') }
+                $actual=Get-Content $file -Raw | ConvertFrom-Json
+                if ($actual.Product -ne 'ShtabAI' -or $actual.Backend -ne 'WSL2' -or $actual.DistroName -ne $record.DistroName -or $actual.Root -ne $record.Root) { throw 'Installation registration mismatch.' }
+                if (-not @($candidates | Where-Object Root -eq $record.Root).Count) {
+                    $candidates+=[pscustomobject]@{Number=$candidates.Count+1; Name=$actual.DistroName; Root=$actual.Root; Acceleration=$actual.Acceleration}
+                }
+            }
+        }
     }
     if (-not $candidates.Count) { Write-Host 'No Shtab.AI WSL installations or unfinished installation directories found.'; return }
     $candidates | Format-Table -Property @('Number','Name','Acceleration','Root') -AutoSize | Out-Host
@@ -40,6 +52,7 @@ try {
     $root=$selected[0].Root
     $manifestPath=Join-Path $root 'installation.json'
     $manifest=Get-Content $manifestPath -Raw | ConvertFrom-Json
+    if ($root -notmatch '^[A-Za-z]:\\' -or [IO.Path]::GetFullPath($root).TrimEnd('\').Length -lt 4) { throw 'Unsafe installation root.' }
     if ([IO.Path]::GetFullPath($manifest.Root).TrimEnd('\') -ne [IO.Path]::GetFullPath($root).TrimEnd('\')) { throw 'Manifest root mismatch. Nothing deleted.' }
     if ((Get-Item $root -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Installation root is a link. Nothing deleted.' }
     if (@(Get-ChildItem $root -Recurse -Force | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw 'Installation directory contains links. Nothing deleted.' }
@@ -99,6 +112,11 @@ try {
         if ([IO.File]::ReadAllText($wslConfig) -ceq $manifest.WSLConfigText) { Remove-Item $wslConfig -Force }
     }
     Remove-Item -LiteralPath $root -Recurse -Force
+    $indexPath=Join-Path $base ($DistroName+'.json')
+    if (Test-Path $indexPath) {
+        $index=Get-Content $indexPath -Raw | ConvertFrom-Json
+        if ($index.Product -eq 'ShtabAI' -and $index.Root -eq $root) { Remove-Item $indexPath -Force }
+    }
     Write-Host 'Shtab.AI removed. Windows, WSL, GPU drivers and other distributions preserved.' -ForegroundColor Green
 } catch {
     Write-Host ('Removal stopped: '+$_.Exception.Message) -ForegroundColor Red

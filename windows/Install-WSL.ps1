@@ -6,7 +6,8 @@ param(
     [ValidateSet('ask','cpu','nvidia','amd')][string]$Acceleration = 'ask',
     [ValidateSet('ask','local','lan')][string]$Access = 'ask',
     [ValidateRange(1024,65535)][int]$HTTPSPort = 8445,
-    [ValidatePattern('^(main|[a-f0-9]{40})$')][string]$Revision = 'main'
+    [ValidatePattern('^(main|[a-f0-9]{40})$')][string]$Revision = 'main',
+    [string]$InstallDir = ''
 )
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -67,7 +68,28 @@ if ($DistroName -in @(Read-Distros)) { throw "Distribution $DistroName already e
 if (Get-NetTCPConnection -LocalPort $HTTPSPort -State Listen -ErrorAction SilentlyContinue) { throw "Windows port $HTTPSPort is occupied." }
 if (Get-NetTCPConnection -LocalPort 18093 -State Listen -ErrorAction SilentlyContinue) { throw 'Windows port 18093 is occupied.' }
 if (Get-NetTCPConnection -LocalPort 11435 -State Listen -ErrorAction SilentlyContinue) { throw 'Windows port 11435 is occupied; native Ollama needs its own port.' }
-$root = Join-Path $env:LOCALAPPDATA ('ShtabAI\' + $DistroName)
+$defaultRoot = Join-Path $env:LOCALAPPDATA ('ShtabAI\' + $DistroName)
+if (-not $InstallDir) {
+    Get-Volume | Where-Object DriveLetter | Select-Object -Property @('DriveLetter','FileSystem','SizeRemaining') | Format-Table -AutoSize | Out-Host
+    $InstallDir = Read-Host ("Installation folder (for example D:\Apps\$DistroName) [$defaultRoot]")
+    if (-not $InstallDir) { $InstallDir=$defaultRoot }
+}
+if ($InstallDir -notmatch '^[A-Za-z]:\\' -or $InstallDir -match '["\r\n]') { throw 'Choose an absolute local drive path.' }
+$root = [IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
+$driveLetter = [IO.Path]::GetPathRoot($root).Substring(0,1)
+$volume = Get-Volume -DriveLetter $driveLetter -ErrorAction Stop
+if ($volume.FileSystem -ne 'NTFS' -or $volume.DriveType -ne 'Fixed') { throw 'Choose a local fixed NTFS drive for WSL and models.' }
+if ($root.Length -lt 4) { throw 'Choose a new application folder, not a drive root.' }
+$ancestor=Split-Path $root
+while ($ancestor -and -not (Test-Path $ancestor)) { $ancestor=Split-Path $ancestor }
+if (-not $ancestor) { throw 'Installation parent is unavailable.' }
+$checkAncestor=$ancestor
+while ($checkAncestor) {
+    if ((Get-Item $checkAncestor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Installation path must not contain junctions or links.' }
+    $checkAncestor=Split-Path $checkAncestor
+}
+$indexPath=Join-Path (Join-Path $env:LOCALAPPDATA 'ShtabAI') ($DistroName+'.json')
+if (Test-Path $indexPath) { throw 'An installation registration already exists; use the uninstaller first.' }
 if ((Get-PSDrive -Name ([IO.Path]::GetPathRoot($root).Substring(0,1))).Free -lt 42949672960) { throw 'At least 40 GiB free on the installation drive is required.' }
 if (Test-Path $root) { throw "Installation directory already exists: $root. Use the uninstaller first." }
 $desktop = [Environment]::GetFolderPath('Desktop')
@@ -116,7 +138,7 @@ if ($Revision -eq 'main') {
     $Revision = $head.sha
 }
 if ($Revision -notmatch '^[a-f0-9]{40}$') { throw 'Cannot resolve a fixed application revision.' }
-$work = Join-Path $env:TEMP ('shtab-wsl-' + [guid]::NewGuid().ToString('N'))
+$work = Join-Path $ancestor ('shtab-wsl-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory $work | Out-Null
 try {
     $archive = Join-Path $work 'source.zip'
@@ -145,11 +167,13 @@ try {
     Write-Host 'Downloading Ubuntu 24.04 WSL image...'
     Invoke-WebRequest -UseBasicParsing -Uri ($imageBase + $imageName) -OutFile $image
     if ((Get-FileHash $image -Algorithm SHA256).Hash.ToLowerInvariant() -ne $matches[0].Groups[1].Value.ToLowerInvariant()) { throw 'Ubuntu image checksum mismatch.' }
-    New-Item -ItemType Directory $root | Out-Null
+    New-Item -ItemType Directory $root -Force | Out-Null
     $manifest = [ordered]@{ Product='ShtabAI'; Backend='WSL2'; DistroName=$DistroName; Root=$root; Revision=$Revision; HTTPSPort=$HTTPSPort; Shortcut=$shortcut; TaskName=('ShtabAI-' + $DistroName + '-Start'); CertificateThumbprint=''; WSLConfigCreated=$false; WSLConfigText=''; Acceleration=$Acceleration; Network=($Access -eq 'lan'); LANAddress=$lanAddress; LANRule=('ShtabAI-' + $DistroName + '-LAN') }
     $manifestPath = Join-Path $root 'installation.json'
     Write-UTF8 $manifestPath ($manifest | ConvertTo-Json)
-    $backupPath = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'ShtabAI-Backups'
+    New-Item -ItemType Directory (Split-Path $indexPath) -Force | Out-Null
+    Write-UTF8 $indexPath (@{Product='ShtabAI'; Backend='WSL2'; DistroName=$DistroName; Root=$root} | ConvertTo-Json)
+    $backupPath = if ($root -eq $defaultRoot) { Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'ShtabAI-Backups' } else { $root+'-Backups' }
     New-Item -ItemType Directory -Path $backupPath -Force | Out-Null
     $manifest.Add('BackupPath',$backupPath)
     Write-UTF8 $manifestPath ($manifest | ConvertTo-Json)

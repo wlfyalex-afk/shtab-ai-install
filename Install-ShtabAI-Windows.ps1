@@ -5,7 +5,8 @@ param(
     [ValidateSet('ask','cpu','nvidia','amd')][string]$Acceleration='ask',
     [ValidateSet('ask','local','lan')][string]$Access='ask',
     [ValidateRange(1024,65535)][int]$HTTPSPort=8445,
-    [ValidatePattern('^(main|[a-f0-9]{40})$')][string]$Revision='main'
+    [ValidatePattern('^(main|[a-f0-9]{40})$')][string]$Revision='main',
+    [string]$InstallDir=''
 )
 $ErrorActionPreference='Stop'
 try {
@@ -14,6 +15,11 @@ try {
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
         $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
         $arguments='-NoProfile -ExecutionPolicy Bypass -File "'+$PSCommandPath+'" -DistroName '+$DistroName+' -Acceleration '+$Acceleration+' -Access '+$Access+' -HTTPSPort '+$HTTPSPort+' -Revision '+$Revision
+        if ($InstallDir) {
+            if ($InstallDir -match '["\r\n]' -or $InstallDir -notmatch '^[A-Za-z]:\\') { throw 'Use an absolute local installation path without quotes or newlines.' }
+            $InstallDir=[IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
+            $arguments+=' -InstallDir "'+$InstallDir+'"'
+        }
         $process=Start-Process $powershell -Verb RunAs -ArgumentList $arguments -Wait -PassThru
         exit $process.ExitCode
     }
@@ -34,7 +40,7 @@ try {
         $expected=($entry[0] -split '  ',2)[0]
         Invoke-WebRequest -UseBasicParsing -Uri ($base+'windows/Install-WSL.ps1') -OutFile $installer
         if ((Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Installer checksum mismatch.' }
-        & $installer -DistroName $DistroName -Acceleration $Acceleration -Access $Access -HTTPSPort $HTTPSPort -Revision $Revision
+        & $installer -DistroName $DistroName -Acceleration $Acceleration -Access $Access -HTTPSPort $HTTPSPort -Revision $Revision -InstallDir $InstallDir
     } finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
 } catch {
     Write-Host ('Installation stopped: '+$_.Exception.Message) -ForegroundColor Red

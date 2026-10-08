@@ -19,6 +19,7 @@ jobs:
           printf 'validation' > secrets/db_password
           printf 'validation' > secrets/flask_secret
           printf 'SHTAB_HTTPS_HOST=localhost\nSHTAB_HTTPS_SITES=https://localhost\n' > .env
+          python -c 'import json,runpy; from pathlib import Path; m=runpy.run_path("scripts/configure-storage.py"); Path("compose.storage.yaml").write_text(json.dumps(m["volume_configuration"](Path("/opt/shtab-ai-021"))))'
           for mode in cpu nvidia amd; do
             python scripts/configure-acceleration.py . "$mode"
             bash scripts/dc.sh config --quiet

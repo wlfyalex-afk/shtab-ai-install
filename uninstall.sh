@@ -8,6 +8,7 @@ case "$mode" in
   *) echo 'Usage: sudo bash uninstall.sh [--keep-data|--fresh|--purge-all]'; exit 2 ;;
 esac
 cd /opt/shtab-ai-021
+[[ ! -f storage.json ]] || { echo 'Use Uninstall-ShtabAI-Ubuntu.sh or menu option 14 for this storage layout; backups stay outside the application folder.'; exit 2; }
 [[ -f compose.yaml ]] || { echo 'Installation not found'; exit 1; }
 state=/var/lib/shtab-ai-021
 mkdir -p "$state"

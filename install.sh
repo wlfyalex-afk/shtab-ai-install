@@ -7,7 +7,9 @@ source /etc/os-release
 [[ $(nproc) -ge 4 ]] || { echo 'Requires at least 4 vCPU'; exit 1; }
 mem=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
 [[ $mem -ge 10000000 ]] || { echo 'Requires at least 10 GB RAM; VM target 12 GB'; exit 1; }
-free=$(df -Pk /opt | awk 'NR==2 {print $4}')
+space_target=/opt
+[[ ! -f /opt/shtab-ai-021/storage.json ]] || space_target=/opt/shtab-ai-021
+free=$(df -Pk "$space_target" | awk 'NR==2 {print $4}')
 [[ $free -ge 31457280 ]] || { echo 'Requires at least 30 GiB free in /opt'; exit 1; }
 install_state=$(systemctl show shtab-ai-install.service -p ActiveState --value 2>/dev/null || true)
 if [[ $install_state == active || $install_state == activating ]]; then
@@ -40,6 +42,7 @@ fi
 mkdir -p "$dst" /var/lib/shtab-ai-021
 if [[ $src != "$dst" ]]; then
     cp -a "$src/app" "$src/database" "$src/scripts" "$src/compose.yaml" "$src/shtabctl" "$src/uninstall.sh" "$src/https" "$dst/"
+    cp "$src/Uninstall-ShtabAI-Ubuntu.sh" "$dst/scripts/full-uninstall.sh"
 fi
 install -d -m 0700 "$dst/secrets"
 python3 - "$dst" <<'PY'

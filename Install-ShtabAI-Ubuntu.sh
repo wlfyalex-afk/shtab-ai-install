@@ -5,6 +5,7 @@ if [[ $EUID -ne 0 ]]; then exec sudo bash "$(readlink -f "${BASH_SOURCE[0]}")" "
 mode=${1:-ask}
 access=${2:-ask}
 revision=${3:-main}
+install_dir=${4:-}
 case "$mode" in ask|cpu|nvidia|amd) ;; *) echo 'Acceleration: ask/cpu/nvidia/amd'; exit 2;; esac
 case "$access" in ask|local|lan) ;; *) echo 'Access: ask/local/lan'; exit 2;; esac
 [[ $revision == main || $revision =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid revision'; exit 2; }
@@ -14,6 +15,11 @@ source /etc/os-release
 umask 077
 work=$(mktemp -d /var/tmp/shtab-bootstrap.XXXXXX)
 trap 'rm -rf "$work"' EXIT
+if [[ -z $install_dir ]]; then
+    lsblk -o NAME,FSTYPE,SIZE,MOUNTPOINTS
+    read -r -p 'Новая папка установки [/opt/shtab-ai-021], например /mnt/data/shtab-ai-021: ' install_dir
+    install_dir=${install_dir:-/opt/shtab-ai-021}
+fi
 if [[ $mode == ask ]]; then
     echo '1 — CPU Intel/AMD. 2 — NVIDIA (Whisper + Ollama). 3 — AMD (Ollama; Whisper на CPU).'
     read -r -p 'Режим [1]: ' choice
@@ -71,6 +77,7 @@ mapfile -t roots < <(find "$work/source" -mindepth 1 -maxdepth 1 -type d)
 [[ ${#roots[@]} == 1 ]] || { echo 'Unexpected archive layout'; exit 1; }
 cd "${roots[0]}"
 sha256sum --quiet -c SHA256SUMS
+python3 scripts/configure-storage.py prepare "$install_dir"
 SHTAB_ACCESS="$access" SHTAB_LAN_ADDRESS="$host" SHTAB_LAN_SUBNET="$subnet" bash install.sh "$host" "$mode"
 deadline=$((SECONDS+10800))
 while true; do

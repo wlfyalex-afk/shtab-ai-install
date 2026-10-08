@@ -76,6 +76,10 @@ MENU
       12) args=(https-check) ;;
       13) args=(certificate) ;;
       14)
+        if [[ -f /opt/shtab-ai-021/storage.json ]]; then
+            cd /
+            exec bash /opt/shtab-ai-021/scripts/full-uninstall.sh
+        fi
         if [[ -f /opt/shtab-ai-021/windows-acceleration ]]; then
             echo 'Для полного удаления используйте Uninstall-ShtabAI-Windows.ps1 в Windows. Копии на диске Windows сохранятся.'
             continue
