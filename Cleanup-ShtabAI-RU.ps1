@@ -37,6 +37,44 @@ function Remove-OwnedTree([string]$Path,[switch]$Top) {
     if ($Top) { Remove-Item -LiteralPath (Join-Path $Path 'installation.json') -Force -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $Path -Force
 }
+function Remove-ShtabShortcuts($Manifest,[string]$Root) {
+    $distro = [string]$Manifest.DistroName
+    $folders = @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('CommonDesktopDirectory'))
+    $saved = [string]$Manifest.Shortcut
+    if ($saved) {
+        if (-not [IO.Path]::IsPathRooted($saved) -or (Split-Path $saved -Leaf) -ine ($distro + '.url')) {
+            throw 'Unexpected shortcut path in installation manifest.'
+        }
+        $folders += Split-Path $saved -Parent
+    }
+    $shell = $null
+    foreach ($folder in @($folders | Where-Object { $_ } | Select-Object -Unique)) {
+        $urlPath = Join-Path $folder ($distro + '.url')
+        if (Test-Path -LiteralPath $urlPath) {
+            $text = [IO.File]::ReadAllText($urlPath)
+            $match = [regex]::Match($text, '(?im)^URL=(.+?)\s*$')
+            $uri = $null
+            $hosts = @('localhost', '127.0.0.1', [string]$Manifest.LANAddress)
+            if ($match.Success -and [Uri]::TryCreate($match.Groups[1].Value.Trim(), [UriKind]::Absolute, [ref]$uri) -and
+                $uri.Scheme -eq 'https' -and $uri.Port -eq [int]$Manifest.HTTPSPort -and
+                $uri.AbsolutePath -eq '/login' -and $uri.Host -in $hosts) {
+                Remove-Item -LiteralPath $urlPath -Force -ErrorAction Stop
+                Write-Host ('Removed shortcut: ' + $urlPath)
+            } else { Write-Warning ('Shortcut target changed; preserved: ' + $urlPath) }
+        }
+        $managerPath = Join-Path $folder ($distro + '-Manager.lnk')
+        if (Test-Path -LiteralPath $managerPath) {
+            if (-not $shell) { $shell = New-Object -ComObject WScript.Shell }
+            $link = $shell.CreateShortcut($managerPath)
+            $expected = '-File "' + (Join-Path $Root 'Manage-ShtabAI.ps1') + '"'
+            if ($link.Arguments.IndexOf($expected, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                Remove-Item -LiteralPath $managerPath -Force -ErrorAction Stop
+                Write-Host ('Removed shortcut: ' + $managerPath)
+            } else { Write-Warning ('Manager shortcut target changed; preserved: ' + $managerPath) }
+        }
+    }
+}
+
 $log=Join-Path $PSScriptRoot ('ShtabAI-cleanup-'+(Get-Date -Format yyyyMMdd-HHmmss)+'.log')
 $record=Join-Path $env:LOCALAPPDATA 'ShtabAI\ShtabAI-021.json'
 $transcribing=$false
@@ -99,8 +137,7 @@ try {
             if ($cert.Thumbprint -eq $thumb) { Remove-Item ('Cert:\CurrentUser\Root\'+$thumb) -ErrorAction SilentlyContinue }
         }
     }
-    $desktop=[Environment]::GetFolderPath('Desktop')
-    foreach ($name in @($distro+'.url',$distro+'-Manager.lnk')) { Remove-Item -LiteralPath (Join-Path $desktop $name) -Force -ErrorAction SilentlyContinue }
+    Remove-ShtabShortcuts $manifest $root
     $config=Join-Path $env:USERPROFILE '.wslconfig'
     if ($manifest.WSLConfigCreated -and (Test-Path -LiteralPath $config) -and [IO.File]::ReadAllText($config) -ceq [string]$manifest.WSLConfigText) { Remove-Item -LiteralPath $config -Force }
     Write-Progress -Activity 'Очистка Штаб.AI' -Status 'Удаление файлов установки и моделей' -PercentComplete 60

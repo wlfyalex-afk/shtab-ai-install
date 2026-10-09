@@ -2,6 +2,44 @@
 [CmdletBinding()]
 param([ValidatePattern('^ShtabAI-[A-Za-z0-9-]+$')][string]$DistroName,[switch]$ListOnly,[switch]$KeepWindowOpen)
 $ErrorActionPreference='Stop'
+function Remove-ShtabShortcuts($Manifest,[string]$Root) {
+    $distro = [string]$Manifest.DistroName
+    $folders = @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('CommonDesktopDirectory'))
+    $saved = [string]$Manifest.Shortcut
+    if ($saved) {
+        if (-not [IO.Path]::IsPathRooted($saved) -or (Split-Path $saved -Leaf) -ine ($distro + '.url')) {
+            throw 'Unexpected shortcut path in installation manifest.'
+        }
+        $folders += Split-Path $saved -Parent
+    }
+    $shell = $null
+    foreach ($folder in @($folders | Where-Object { $_ } | Select-Object -Unique)) {
+        $urlPath = Join-Path $folder ($distro + '.url')
+        if (Test-Path -LiteralPath $urlPath) {
+            $text = [IO.File]::ReadAllText($urlPath)
+            $match = [regex]::Match($text, '(?im)^URL=(.+?)\s*$')
+            $uri = $null
+            $hosts = @('localhost', '127.0.0.1', [string]$Manifest.LANAddress)
+            if ($match.Success -and [Uri]::TryCreate($match.Groups[1].Value.Trim(), [UriKind]::Absolute, [ref]$uri) -and
+                $uri.Scheme -eq 'https' -and $uri.Port -eq [int]$Manifest.HTTPSPort -and
+                $uri.AbsolutePath -eq '/login' -and $uri.Host -in $hosts) {
+                Remove-Item -LiteralPath $urlPath -Force -ErrorAction Stop
+                Write-Host ('Removed shortcut: ' + $urlPath)
+            } else { Write-Warning ('Shortcut target changed; preserved: ' + $urlPath) }
+        }
+        $managerPath = Join-Path $folder ($distro + '-Manager.lnk')
+        if (Test-Path -LiteralPath $managerPath) {
+            if (-not $shell) { $shell = New-Object -ComObject WScript.Shell }
+            $link = $shell.CreateShortcut($managerPath)
+            $expected = '-File "' + (Join-Path $Root 'Manage-ShtabAI.ps1') + '"'
+            if ($link.Arguments.IndexOf($expected, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                Remove-Item -LiteralPath $managerPath -Force -ErrorAction Stop
+                Write-Host ('Removed shortcut: ' + $managerPath)
+            } else { Write-Warning ('Manager shortcut target changed; preserved: ' + $managerPath) }
+        }
+    }
+}
+
 try {
     $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
     $principal=New-Object Security.Principal.WindowsPrincipal($identity)
@@ -94,14 +132,7 @@ try {
         & netsh.exe interface portproxy delete v4tov4 listenaddress=$($manifest.LANAddress) listenport=$($manifest.HTTPSPort) | Out-Null
         if ($LASTEXITCODE -ne 0) { Write-Host 'No LAN forwarding entry, or cleanup incomplete; inspect netsh interface portproxy show v4tov4.' -ForegroundColor Yellow }
     }
-    $shortcut=Join-Path ([Environment]::GetFolderPath('Desktop')) ($DistroName+'.url')
-    if ((Test-Path $shortcut) -and (Get-Content $shortcut -Raw) -match ('(?m)^URL=https://localhost:'+ $manifest.HTTPSPort+'/login\s*$')) { Remove-Item $shortcut -Force }
-    $managerPath=Join-Path ([Environment]::GetFolderPath('Desktop')) ($DistroName+'-Manager.lnk')
-    if (Test-Path $managerPath) {
-        $shell=New-Object -ComObject WScript.Shell
-        $link=$shell.CreateShortcut($managerPath)
-        if ($link.Arguments -like ('*'+(Join-Path $root 'Manage-ShtabAI.ps1')+'*')) { Remove-Item $managerPath -Force }
-    }
+    Remove-ShtabShortcuts $manifest $root
     if ($manifest.CertificateThumbprint -match '^[A-Fa-f0-9]{40}$') {
         $certificate='Cert:\CurrentUser\Root\'+$manifest.CertificateThumbprint
         if (Test-Path $certificate) { Remove-Item $certificate -Force }
