@@ -46,6 +46,9 @@ jobs:
       - name: Check 12 GB memory policy using Windows PowerShell 5.1
         shell: powershell
         run: .\tests\Test-MemoryLimits.ps1
+      - name: Check legacy WSL runtime installation using Windows PowerShell 5.1
+        shell: powershell
+        run: .\tests\Test-WSLRuntimeInstall.ps1
       - name: Check dynamic LAN configuration using Windows PowerShell 5.1
         shell: powershell
         run: .\tests\Test-RuntimeNetwork.ps1

@@ -45,6 +45,36 @@ function Test-WSLInstalled {
     }
     return ($versionExitCode -eq 0)
 }
+function Install-ShtabWSLRuntime {
+    # The Windows inbox WSL can lack --no-distribution and --version.
+    # Install Microsoft's signed modern runtime without a default distro.
+    Write-Host 'Downloading official Microsoft WSL runtime (MSI, no Linux distribution)...' -ForegroundColor Cyan
+    $release=Invoke-RestMethod -Uri 'https://api.github.com/repos/microsoft/WSL/releases/latest' -Headers @{'User-Agent'='ShtabAI-Installer'} -TimeoutSec 60
+    if ($release.prerelease -or $release.draft) { throw 'Stable Microsoft WSL release is unavailable.' }
+    $assets=@($release.assets | Where-Object { $_.name -match '^wsl\.[0-9.]+\.x64\.msi$' })
+    if ($assets.Count -ne 1) { throw 'Official WSL x64 MSI asset is unavailable.' }
+    $uri=[string]$assets[0].browser_download_url
+    if ($uri -notmatch '^https://github\.com/microsoft/WSL/releases/download/[^/]+/wsl\.[0-9.]+\.x64\.msi$') { throw 'Unexpected WSL download source.' }
+    $directory=Join-Path $env:TEMP ('shtab-wsl-runtime-'+[guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $directory | Out-Null
+    $package=Join-Path $directory 'wsl.x64.msi'
+    $log=Join-Path $env:TEMP ('ShtabAI-WSL-MSI-'+[guid]::NewGuid().ToString('N')+'.log')
+    try {
+        Invoke-WebRequest -UseBasicParsing -Uri $uri -OutFile $package -TimeoutSec 600
+        $signature=Get-AuthenticodeSignature -LiteralPath $package
+        if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(^|,\s*)O=Microsoft Corporation(,|$)') {
+            throw 'Microsoft WSL MSI signature verification failed.'
+        }
+        Write-Host 'Microsoft signature verified. Installing WSL runtime; this may take several minutes...' -ForegroundColor Cyan
+        $msiexec=Join-Path $env:SystemRoot 'System32\msiexec.exe'
+        if (-not [Environment]::Is64BitProcess) { $msiexec=Join-Path $env:SystemRoot 'Sysnative\msiexec.exe' }
+        $process=Start-Process -FilePath $msiexec -ArgumentList ('/i "'+$package+'" /qn /norestart /L*v "'+$log+'"') -Wait -PassThru
+        if ($process.ExitCode -notin @(0,3010)) { throw ("Microsoft WSL installation failed (code $($process.ExitCode)). MSI log: $log") }
+        Write-Host ("WSL runtime installation completed. MSI log: $log") -ForegroundColor Green
+    } finally {
+        Remove-Item -LiteralPath $directory -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
 function Quote-Shell([string]$Value) {
     $q = [string][char]39
     return $q + $Value.Replace($q,($q + [char]34 + $q + [char]34 + $q)) + $q
@@ -89,7 +119,7 @@ if (-not (Test-Path $script:wsl)) { throw 'WSL executable is unavailable. Restar
 Write-Host 'Checking WSL runtime...' -ForegroundColor Cyan
 if (-not (Test-WSLInstalled)) {
     Write-Host 'Installing WSL runtime (no default Linux distribution)...' -ForegroundColor Cyan
-    Invoke-WSL --install --no-distribution --web-download
+    Install-ShtabWSLRuntime
     Write-Host 'WSL installed. Restart Windows and repeat installation.' -ForegroundColor Yellow
     return
 }
