@@ -40,6 +40,9 @@ jobs:
       - name: Check missing WSL probe using Windows PowerShell 5.1
         shell: powershell
         run: .\tests\Test-WSLProbe.ps1
+      - name: Check complete bootstrap download using Windows PowerShell 5.1
+        shell: powershell
+        run: .\tests\Test-BootstrapDownload.ps1
       - name: Check dynamic LAN configuration using Windows PowerShell 5.1
         shell: powershell
         run: .\tests\Test-RuntimeNetwork.ps1
