@@ -43,6 +43,11 @@ jobs:
       - name: Check dynamic LAN configuration using Windows PowerShell 5.1
         shell: powershell
         run: .\tests\Test-RuntimeNetwork.ps1
+      - name: Check GPU selection and cleanup paths using Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          .\tests\Test-GPUSelection.ps1
+          .\tests\Test-CleanupPaths.ps1
       - name: Parse Windows menu commands
         shell: powershell
         run: |

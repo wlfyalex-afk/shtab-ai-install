@@ -13,6 +13,7 @@ $keepalive = $null
 $server = $null
 $lastIP = ''
 $lastGateway = ''
+$lastMode = ''
 $lastForward = '__startup__'
 $previousLAN = [string]$manifest.LANAddress
 function Guest {
@@ -20,7 +21,7 @@ function Guest {
     if ($LASTEXITCODE -ne 0) { throw 'WSL runtime command failed.' }
 }
 function Write-State([string]$IP,[string]$Gateway) {
-    $json = @{ IP=$IP; Gateway=$Gateway; Endpoint=("http://${Gateway}:11435"); Ready=$true; LANAddress=$manifest.LANAddress; LANUrl=$(if ($manifest.LANAddress) { "https://$($manifest.LANAddress):$($manifest.HTTPSPort)/login" } else { "" }) } | ConvertTo-Json
+    $json = @{ IP=$IP; Gateway=$Gateway; Endpoint=("http://${Gateway}:11435"); Ready=$true; Acceleration=$lastMode; LANAddress=$manifest.LANAddress; LANUrl=$(if ($manifest.LANAddress) { "https://$($manifest.LANAddress):$($manifest.HTTPSPort)/login" } else { "" }) } | ConvertTo-Json
     $temporary = Join-Path $root 'runtime-state.tmp'
     [IO.File]::WriteAllText($temporary,$json,(New-Object Text.UTF8Encoding($false)))
     Move-Item -LiteralPath $temporary -Destination (Join-Path $root 'runtime-state.json') -Force
@@ -96,7 +97,13 @@ try {
         if ($route -notmatch '^default via (\d+\.\d+\.\d+\.\d+)') { throw 'WSL NAT gateway not found. This installer requires WSL NAT networking.' }
         $gateway = $Matches[1]
         if (-not $ip) { throw 'WSL address is unavailable.' }
-        if ($ip -ne $lastIP -or $gateway -ne $lastGateway -or -not $server -or $server.HasExited) {
+        $mode = [string]$manifest.Acceleration
+        & $wsl --distribution $manifest.DistroName --user root --exec /usr/bin/test -f /opt/shtab-ai-021/native-cpu-fallback.json
+        if ($LASTEXITCODE -eq 0) {
+            $fallback = (Guest /bin/cat /opt/shtab-ai-021/native-cpu-fallback.json | Out-String) | ConvertFrom-Json
+            if ($fallback.mode -eq 'cpu') { $mode='cpu' }
+        }
+        if ($mode -ne $lastMode -or $ip -ne $lastIP -or $gateway -ne $lastGateway -or -not $server -or $server.HasExited) {
             if ($server -and -not $server.HasExited) { Stop-Process -Id $server.Id -Force }
             $ruleName = $manifest.TaskName + '-Ollama'
             $rule = Get-NetFirewallRule -Name $ruleName -ErrorAction SilentlyContinue
@@ -109,10 +116,10 @@ try {
             $env:OLLAMA_MAX_LOADED_MODELS = '1'
             $env:OLLAMA_VULKAN = '0'
             Remove-Item -Path @('Env:CUDA_VISIBLE_DEVICES','Env:HIP_VISIBLE_DEVICES','Env:ROCR_VISIBLE_DEVICES') -ErrorAction SilentlyContinue
-            if ($manifest.Acceleration -eq 'cpu') {
+            if ($mode -eq 'cpu') {
                 $env:CUDA_VISIBLE_DEVICES = '-1'; $env:HIP_VISIBLE_DEVICES = '-1'; $env:ROCR_VISIBLE_DEVICES = '-1'
-            } elseif ($manifest.Acceleration -eq 'amd') { $env:CUDA_VISIBLE_DEVICES = '-1' }
-            elseif ($manifest.Acceleration -eq 'nvidia') { $env:HIP_VISIBLE_DEVICES = '-1'; $env:ROCR_VISIBLE_DEVICES = '-1' }
+            } elseif ($mode -eq 'amd') { $env:CUDA_VISIBLE_DEVICES = '-1' }
+            elseif ($mode -eq 'nvidia') { $env:HIP_VISIBLE_DEVICES = '-1'; $env:ROCR_VISIBLE_DEVICES = '-1' }
             $server = Start-Process -FilePath $ollama -ArgumentList 'serve' -WorkingDirectory (Split-Path $ollama) -WindowStyle Hidden -RedirectStandardOutput (Join-Path $root 'ollama.log') -RedirectStandardError (Join-Path $root 'ollama-error.log') -PassThru
             $ready = $false
             for ($attempt=0; $attempt -lt 30; $attempt++) {
@@ -120,9 +127,20 @@ try {
                 try { $null = Invoke-RestMethod -Uri ("http://${gateway}:11435/api/version") -TimeoutSec 2; $ready=$true; break } catch { Start-Sleep -Seconds 2 }
             }
             if (-not $ready) { throw 'Native Ollama did not become ready.' }
-            $lastIP=$ip; $lastGateway=$gateway
+            $lastIP=$ip; $lastGateway=$gateway; $lastMode=$mode
+            if ($mode -eq 'cpu') {
+                $freshMode = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
+                $freshMode.Acceleration='cpu'
+                [IO.File]::WriteAllText($ManifestPath,($freshMode | ConvertTo-Json),(New-Object Text.UTF8Encoding($false)))
+                $manifest.Acceleration='cpu'
+                & $wsl --distribution $manifest.DistroName --user root --exec /usr/bin/test -d /opt/shtab-ai-021
+                if ($LASTEXITCODE -eq 0) { Guest /bin/touch /opt/shtab-ai-021/native-cpu-applied }
+            }
         }
         Sync-LAN $ip
+        if ($mode -eq 'cpu' -and $fallback -and $fallback.mode -eq 'cpu') {
+            Guest /bin/touch /opt/shtab-ai-021/native-cpu-applied
+        }
         Sync-GuestConfig $gateway
         Write-State $ip $gateway
         if ($keepalive.HasExited) { throw 'WSL keepalive stopped.' }

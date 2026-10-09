@@ -140,12 +140,16 @@ services:
       db:
         condition: service_healthy
   qwen-download:
-    <<: *app
+    image: python:3.11-slim-bookworm
     profiles: [setup]
     restart: 'no'
+    read_only: true
+    tmpfs: ['/tmp:mode=1777']
+    user: '10001:10001'
     command: ['python', '-u', '/installer/ollama-api.py', 'pull']
     environment:
-      <<: *env
+      PYTHONDONTWRITEBYTECODE: '1'
+      SHTAB_OLLAMA_ENDPOINT: ${SHTAB_OLLAMA_ENDPOINT:-http://ollama:11434}
       SHTAB_PROGRESS_FILE: /progress/qwen-progress.json
     volumes:
       - ./scripts:/installer:ro
@@ -161,6 +165,7 @@ services:
       <<: *env
       HF_HUB_OFFLINE: '0'
       SHTAB_PROGRESS_FILE: /progress/whisper-progress.json
+      SHTAB_ASR_RESULT_FILE: /progress/asr-compute.json
     volumes:
       - app_data:/srv/shtab-ai
       - asr_models:/srv/shtab-ai/response-models

@@ -3,13 +3,14 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^ShtabAI-[A-Za-z0-9-]+$')][string]$DistroName = 'ShtabAI-021',
-    [ValidateSet('ask','cpu','nvidia','amd')][string]$Acceleration = 'ask',
+    [ValidateSet('ask','auto','cpu','nvidia','amd')][string]$Acceleration = 'ask',
     [ValidateSet('ask','local','lan')][string]$Access = 'ask',
     [ValidateRange(1024,65535)][int]$HTTPSPort = 8445,
     [ValidatePattern('^(main|[a-f0-9]{40})$')][string]$Revision = 'main',
     [string]$InstallDir = ''
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Test-ShtabGPU.ps1')
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 function Invoke-WSL {
     & $script:wsl @args
@@ -135,13 +136,16 @@ if ((Test-Path $wslConfig) -and (Get-Content $wslConfig -Raw) -match '(?im)^\s*n
 Write-Host 'Detected Windows display adapters:'
 Get-CimInstance Win32_VideoController | Select-Object -Property @('Name','DriverVersion') | Format-Table -AutoSize | Out-Host
 if ($Acceleration -eq 'ask') {
-    Write-Host '1 - CPU. 2 - NVIDIA (Ollama + Whisper). 3 - AMD Radeon (native Ollama; Whisper on CPU).'
-    $choice = Read-Host 'Acceleration [1]'
-    if ($choice -in @('','1')) { $Acceleration = 'cpu' }
-    elseif ($choice -eq '2') { $Acceleration = 'nvidia' }
-    elseif ($choice -eq '3') { $Acceleration = 'amd' }
-    else { throw 'Invalid acceleration selection.' }
+    $choice = Read-Host 'Ускорение: 1 — автоматическая проверка; 2 — процессор [1]'
+    if ($choice -in @('','1')) { $Acceleration='auto' } elseif ($choice -eq '2') { $Acceleration='cpu' } else { throw 'Некорректный выбор.' }
 }
+try {
+    $antiviruses=@(Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction Stop)
+    Write-Host ('Антивирусы: '+(($antiviruses | ForEach-Object { $_.displayName }) -join ', '))
+} catch { Write-Host 'Список антивирусов недоступен через Windows Security Center.' }
+Write-Host 'При блокировке Kaspersky вручную приостановите защиту на время установки либо задайте точечные исключения для проверенных файлов. После установки включите защиту и проверьте запуск.'
+$gpuDecision=Get-ShtabAcceleration $Acceleration
+$Acceleration=$gpuDecision.Mode
 if ($Access -eq 'ask') {
     $answer = Read-Host 'Access: 1 - this PC only; 2 - local network [2]'
     if ($answer -in @('','2')) { $Access='lan' } elseif ($answer -eq '1') { $Access='local' } else { throw 'Invalid access selection.' }
@@ -159,8 +163,14 @@ if ($Access -eq 'lan') {
     if (-not [int]::TryParse($selected,[ref]$number) -or $number -lt 1 -or $number -gt $adapters.Count) { throw 'Invalid LAN interface.' }
     $lanAddress=$adapters[$number-1].IP
     $profile = Get-NetConnectionProfile -InterfaceIndex $adapters[$number-1].Index -ErrorAction SilentlyContinue
-    if ($profile -and $profile.NetworkCategory -eq 'Public') {
-        throw 'Selected network is Public. Set the trusted office/home network to Private, or select local-only access.'
+    if (-not $profile) { throw 'Не удалось определить профиль сети. Проверьте подключение.' }
+    Write-Host ('Сеть: '+$profile.Name+'; IPv4: '+$lanAddress+'; профиль: '+$profile.NetworkCategory)
+    if ($profile.NetworkCategory -eq 'Public') {
+        $trusted = Read-Host 'Это доверенная домашняя/офисная сеть? Введите Д, чтобы применить частный профиль; Н — остановить установку'
+        if ($trusted -notin @('Д','д','Y','y')) { throw 'Сеть оставлена общедоступной. Для LAN нужен доверенный частный профиль.' }
+        Set-NetConnectionProfile -InterfaceIndex $adapters[$number-1].Index -NetworkCategory Private
+        $profile=Get-NetConnectionProfile -InterfaceIndex $adapters[$number-1].Index
+        if ($profile.NetworkCategory -ne 'Private') { throw 'Частный профиль не применился.' }
     }
 }
 if ($Revision -eq 'main') {
@@ -232,8 +242,7 @@ try {
     if ($Acceleration -eq 'nvidia') {
         & $script:wsl --distribution $DistroName --user root --exec /usr/lib/wsl/lib/nvidia-smi -L
         if ($LASTEXITCODE -ne 0) {
-            $fallback = Read-Host 'NVIDIA unavailable in WSL. Type CPU to continue without GPU, or Enter to stop'
-            if ($fallback -cne 'CPU') { throw 'GPU check failed. Installation data preserved for removal.' }
+            Write-Host 'NVIDIA недоступна в WSL. Автоматически продолжаем на CPU.' -ForegroundColor Yellow
             $Acceleration = 'cpu'; $manifest.Acceleration = 'cpu'
             Write-UTF8 $manifestPath ($manifest | ConvertTo-Json)
         }

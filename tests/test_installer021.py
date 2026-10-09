@@ -124,6 +124,7 @@ class InstallerTests(unittest.TestCase):
                 return kw['local_dir']
             def model(*a, **kw):
                 loads.append((a,kw))
+                return types.SimpleNamespace(transcribe=lambda *a, **k: (iter([]), None))
             sys.path.insert(0, str(ROOT/'scripts'))
             modules = {'huggingface_hub': types.SimpleNamespace(HfApi=Api,snapshot_download=snapshot),
                        'faster_whisper': types.SimpleNamespace(WhisperModel=model)}

@@ -28,7 +28,10 @@ EOF
     DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 fi
 systemctl enable --now docker
-bash scripts/prepare-gpu.sh "$(cat acceleration 2>/dev/null || echo cpu)"
+if ! bash scripts/prepare-gpu.sh "$(cat acceleration 2>/dev/null || echo cpu)"; then
+    echo 'Подготовка GPU не пройдена. Автоматически настраиваем процессор.'
+    python3 scripts/configure-acceleration.py /opt/shtab-ai-021 cpu
+fi
 if [[ $(cat access-mode 2>/dev/null || true) == lan ]]; then
     bash scripts/network-firewall.sh apply
     cat > /etc/systemd/system/shtab-ai-network.service <<EOF
@@ -68,12 +71,31 @@ if [[ -n $external ]]; then
 elif ! dc exec -T ollama ollama show qwen3:4b >/dev/null 2>&1; then
     dc --profile setup run --rm qwen-download
 fi
-stage DOWNLOADING_WHISPER
-dc --profile setup run --rm asr-download
-stage CHECKING_DATABASE_AND_MODELS
 if [[ -z $external ]]; then
-    dc run --rm web python /installer/ollama-api.py check "$(cat acceleration)"
+    # Run the host checker against the private Docker-published API through a container.
+    set +e
+    dc run --rm -v "$PWD/download-progress:/gpu-result" -e SHTAB_GPU_RESULT_ROOT=/gpu-result web python /installer/ollama-api.py check "$(cat acceleration)"
+    result=$?
+    set -e
+    if [[ $result == 20 ]]; then
+        echo 'GPU для Qwen не подтверждена. Переключаем Ollama на CPU.'
+        python3 scripts/configure-acceleration.py /opt/shtab-ai-021 cpu
+        dc build web
+        dc up -d --wait --wait-timeout 240 ollama
+        dc run --rm -v "$PWD/download-progress:/gpu-result" -e SHTAB_GPU_RESULT_ROOT=/gpu-result web python /installer/ollama-api.py check cpu
+    elif [[ $result != 0 ]]; then exit "$result"; fi
 fi
+stage DOWNLOADING_WHISPER
+if ! dc --profile setup run --rm asr-download; then
+    if [[ $(cat acceleration) != nvidia ]]; then exit 1; fi
+    echo 'Запуск контейнера Whisper на GPU не прошёл. Проверяем CPU.'
+    python3 scripts/apply-asr-cpu.py /opt/shtab-ai-021
+    dc --profile setup run --rm asr-download
+fi
+if python3 -c 'import json; from pathlib import Path; p=Path("download-progress/asr-compute.json"); raise SystemExit(0 if p.exists() and json.loads(p.read_text())["device"] == "cpu" else 1)'; then
+    python3 scripts/apply-asr-cpu.py /opt/shtab-ai-021
+fi
+stage CHECKING_DATABASE_AND_MODELS
 dc run --rm web python manage.py check
 dc run --rm meeting-worker python meeting_worker.py check --load-model
 dc run --rm llm-worker python llm_worker013.py check

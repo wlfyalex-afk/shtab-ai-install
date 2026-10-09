@@ -216,11 +216,68 @@ function Remove-EarlyInstallation($Manifest) {
     Write-Host 'Незавершённая установка удалена. Папка резервных копий сохранена.' -ForegroundColor Green
 }
 
+#Requires -Version 5.1
+# Compatibility snapshot: https://docs.ollama.com/gpu, checked 2026-10-09.
+# The 4096 MiB free-memory threshold is our conservative installation policy,
+# not an official model minimum. Actual inference is still required.
+function Select-ShtabAcceleration($Cards,[string]$Requested='auto') {
+    if ($Requested -eq 'cpu') { return [pscustomobject]@{Mode='cpu';Reason='Выбран процессор'} }
+    foreach ($card in $Cards) {
+        if ($Requested -notin @('auto','nvidia')) { continue }
+        if ($card.Vendor -ne 'nvidia') { continue }
+        $cc=0.0; $driver=0.0; $free=0.0
+        $culture=[Globalization.CultureInfo]::InvariantCulture
+        $style=[Globalization.NumberStyles]::Float
+        if (-not [double]::TryParse([string]$card.CC,$style,$culture,[ref]$cc) -or -not [double]::TryParse([string]$card.Driver,$style,$culture,[ref]$driver) -or -not [double]::TryParse([string]$card.Free,$style,$culture,[ref]$free)) { continue }
+        $minimumDriver=550
+        if ($cc -lt 6.3) { $minimumDriver=570 }
+        if ($cc -ge 5 -and $driver -ge $minimumDriver -and $free -ge 4096) {
+            return [pscustomobject]@{Mode='nvidia';Reason=([string]$card.Name+'; CUDA CC '+$cc+'; free MiB '+$free)}
+        }
+    }
+    # Exact Windows ROCm list; no family/prefix guessing, no Linux overrides.
+    $amd=@('AMD Radeon RX 7900 XTX','AMD Radeon RX 7900 XT','AMD Radeon RX 7900 GRE','AMD Radeon RX 7800 XT','AMD Radeon RX 7700 XT','AMD Radeon RX 7600 XT','AMD Radeon RX 7600','AMD Radeon PRO W7900','AMD Radeon PRO W7800','AMD Radeon PRO W7700','AMD Radeon PRO W7600','AMD Radeon PRO W7500')
+    foreach ($card in $Cards) {
+        if ($Requested -in @('auto','amd') -and $card.Name -in $amd) {
+            return [pscustomobject]@{Mode='amd';Reason=([string]$card.Name+'; ROCm требует пробного запуска; Whisper работает на CPU')}
+        }
+    }
+    return [pscustomobject]@{Mode='cpu';Reason='Совместимая GPU с подходящим драйвером и запасом памяти не подтверждена; автоматически используем CPU'}
+}
+function Get-ShtabAcceleration([string]$Requested='auto') {
+    $cards=@(Get-CimInstance Win32_VideoController | ForEach-Object {
+        [pscustomobject]@{Name=$_.Name;Vendor='other';CC='';Driver=$_.DriverVersion;Total='';Free=''}
+    })
+    $smi=Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue
+    if (-not $smi) {
+        $path=Join-Path $env:SystemRoot 'System32\nvidia-smi.exe'
+        if (Test-Path -LiteralPath $path) { $smi=[pscustomobject]@{Source=$path} }
+    }
+    if ($smi) {
+        $saved=$ErrorActionPreference
+        try {
+            $ErrorActionPreference='Continue'
+            $lines=& $smi.Source --query-gpu=name,compute_cap,driver_version,memory.total,memory.free --format=csv,noheader,nounits 2>$null
+            $exit=$LASTEXITCODE
+        } finally { $ErrorActionPreference=$saved }
+        if ($exit -eq 0) {
+            foreach ($item in ($lines | ConvertFrom-Csv -Header Name,CC,Driver,Total,Free)) {
+                $cards += [pscustomobject]@{Name=$item.Name.Trim();Vendor='nvidia';CC=$item.CC.Trim();Driver=$item.Driver.Trim();Total=$item.Total.Trim();Free=$item.Free.Trim()}
+            }
+        }
+    }
+    Write-Host 'Диагностика GPU: точная модель, драйвер, CUDA, видеопамять и свободная память (МБ)'
+    $cards | Format-Table Name,Driver,CC,Total,Free -AutoSize | Out-Host
+    $selection=Select-ShtabAcceleration $cards $Requested
+    Write-Host ('Выбран режим: '+$selection.Mode+' / '+$selection.Reason)
+    return $selection
+}
+
 function Install-ShtabAI {
 [CmdletBinding()]
 param(
     [ValidatePattern('^ShtabAI-[A-Za-z0-9-]+$')][string]$DistroName = 'ShtabAI-021',
-    [ValidateSet('ask','cpu','nvidia','amd')][string]$Acceleration = 'ask',
+    [ValidateSet('ask','auto','cpu','nvidia','amd')][string]$Acceleration = 'ask',
     [ValidateSet('ask','local','lan')][string]$Access = 'ask',
     [ValidateRange(1024,65535)][int]$HTTPSPort = 8445,
     [ValidatePattern('^(main|[a-f0-9]{40})$')][string]$Revision = 'main',
@@ -355,13 +412,16 @@ if ((Test-Path $wslConfig) -and (Get-Content $wslConfig -Raw) -match '(?im)^\s*n
 Write-Host 'Обнаружены видеокарты:'
 Get-CimInstance Win32_VideoController | Select-Object @{Name='Видеокарта';Expression={$_.Name}},@{Name='Драйвер';Expression={$_.DriverVersion}} | Format-Table -AutoSize | Out-Host
 if ($Acceleration -eq 'ask') {
-    Write-Host '1 — процессор. 2 — NVIDIA (Ollama и Whisper). 3 — AMD Radeon (Ollama на видеокарте, Whisper на процессоре).'
-    $choice = Read-Host 'Ускорение [1]'
-    if ($choice -in @('','1')) { $Acceleration = 'cpu' }
-    elseif ($choice -eq '2') { $Acceleration = 'nvidia' }
-    elseif ($choice -eq '3') { $Acceleration = 'amd' }
-    else { throw 'Некорректный выбор ускорения.' }
+    $choice = Read-Host 'Ускорение: 1 — автоматическая проверка; 2 — процессор [1]'
+    if ($choice -in @('','1')) { $Acceleration='auto' } elseif ($choice -eq '2') { $Acceleration='cpu' } else { throw 'Некорректный выбор.' }
 }
+try {
+    $antiviruses=@(Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction Stop)
+    Write-Host ('Антивирусы: '+(($antiviruses | ForEach-Object { $_.displayName }) -join ', '))
+} catch { Write-Host 'Список антивирусов недоступен через Windows Security Center.' }
+Write-Host 'При блокировке Kaspersky вручную приостановите защиту на время установки либо задайте точечные исключения для проверенных файлов. После установки включите защиту и проверьте запуск.'
+$gpuDecision=Get-ShtabAcceleration $Acceleration
+$Acceleration=$gpuDecision.Mode
 if ($Access -eq 'ask') {
     $answer = Read-Host 'Доступ: 1 — только этот компьютер; 2 — локальная сеть [2]'
     if ($answer -in @('','2')) { $Access='lan' } elseif ($answer -eq '1') { $Access='local' } else { throw 'Некорректный выбор доступа.' }
@@ -379,8 +439,14 @@ if ($Access -eq 'lan') {
     if (-not [int]::TryParse($selected,[ref]$number) -or $number -lt 1 -or $number -gt $adapters.Count) { throw 'Некорректный сетевой интерфейс.' }
     $lanAddress=$adapters[$number-1].IP
     $profile = Get-NetConnectionProfile -InterfaceIndex $adapters[$number-1].Index -ErrorAction SilentlyContinue
-    if ($profile -and $profile.NetworkCategory -eq 'Public') {
-        throw 'Выбранная сеть имеет профиль «Общедоступная». Для доверенной сети задайте профиль «Частная» или выберите доступ только с этого компьютера.'
+    if (-not $profile) { throw 'Не удалось определить профиль сети. Проверьте подключение.' }
+    Write-Host ('Сеть: '+$profile.Name+'; IPv4: '+$lanAddress+'; профиль: '+$profile.NetworkCategory)
+    if ($profile.NetworkCategory -eq 'Public') {
+        $trusted = Read-Host 'Это доверенная домашняя/офисная сеть? Введите Д, чтобы применить частный профиль; Н — остановить установку'
+        if ($trusted -notin @('Д','д','Y','y')) { throw 'Сеть оставлена общедоступной. Для LAN нужен доверенный частный профиль.' }
+        Set-NetConnectionProfile -InterfaceIndex $adapters[$number-1].Index -NetworkCategory Private
+        $profile=Get-NetConnectionProfile -InterfaceIndex $adapters[$number-1].Index
+        if ($profile.NetworkCategory -ne 'Private') { throw 'Частный профиль не применился.' }
     }
 }
 if ($Revision -eq 'main') {
@@ -472,8 +538,7 @@ try {
     if ($Acceleration -eq 'nvidia') {
         & $script:wsl --distribution $DistroName --user root --exec /usr/lib/wsl/lib/nvidia-smi -L
         if ($LASTEXITCODE -ne 0) {
-            $fallback = Read-Host 'NVIDIA недоступна в WSL. Введите CPU для продолжения на процессоре или нажмите Enter для остановки'
-            if ($fallback -cne 'CPU') { throw 'Проверка видеокарты не пройдена. Данные установки сохранены для удаления.' }
+            Write-Host 'NVIDIA недоступна в WSL. Автоматически продолжаем на CPU.' -ForegroundColor Yellow
             $Acceleration = 'cpu'; $manifest.Acceleration = 'cpu'
             Write-UTF8 $manifestPath ($manifest | ConvertTo-Json)
         }
@@ -563,7 +628,10 @@ try {
     Show-Stage 17 'Проверка страницы входа и сетевого доступа'
     $response = Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 15
     if ($response.StatusCode -ne 200) { throw 'Проверка страницы входа из Windows не пройдена.' }
-    Write-Host "Штаб.AI готов: $url | режим ускорения: $Acceleration" -ForegroundColor Green
+    $qwenActual=(Invoke-Guest /bin/cat /opt/shtab-ai-021/qwen-compute.json | Out-String) | ConvertFrom-Json
+    $asrActual=(Invoke-Guest /bin/cat /opt/shtab-ai-021/download-progress/asr-compute.json | Out-String) | ConvertFrom-Json
+    Write-Host ('Проверенный режим Qwen: '+$qwenActual.device+'; Whisper: '+$asrActual.device) -ForegroundColor Green
+    Write-Host "Штаб.AI готов: $url | выбранный предварительно режим: $Acceleration" -ForegroundColor Green
     $currentManifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
     $lanAddress = [string]$currentManifest.LANAddress
     if ($manifest.Network -and $lanAddress) {

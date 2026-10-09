@@ -1,7 +1,9 @@
 import json
 import os
 import threading
-import time
+import wave
+import tempfile
+from gpu_fallback import verify_whisper
 from model_progress import Reporter
 # HTTP writes incremental .incomplete files, which the monitor can measure.
 os.environ["HF_HUB_DISABLE_XET"] = "1"
@@ -12,9 +14,25 @@ from faster_whisper import WhisperModel
 root = Path('/srv/shtab-ai/response-models/turbo')
 repo = 'mobiuslabsgmbh/faster-whisper-large-v3-turbo'
 marker = root / 'shtab-model.json'
+def verify_model(path):
+    # Silence is enough to exercise encoder/decoder without shipping private audio.
+    with tempfile.NamedTemporaryFile(suffix='.wav') as sample:
+        with wave.open(sample.name, 'wb') as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(16000)
+            wav.writeframes(b'\0\0' * 16000)
+        device, reason = verify_whisper(path, os.environ.get('SHTAB_ASR_DEVICE', 'cpu'),
+                                       os.environ.get('SHTAB_ASR_COMPUTE_TYPE', 'int8'),
+                                       WhisperModel, sample.name)
+    result = {'device': device, 'fallback_reason': reason}
+    result_path = Path(os.environ.get('SHTAB_ASR_RESULT_FILE', '/tmp/asr-compute.json'))
+    result_path.parent.mkdir(parents=True, exist_ok=True)
+    result_path.write_text(json.dumps(result, ensure_ascii=False))
+    print('Whisper: ' + device + ('; GPU не подошла, проверка CPU пройдена' if reason else '; пробное распознавание пройдено'), flush=True)
+
 if marker.exists():
-    WhisperModel(str(root), device=os.environ.get('SHTAB_ASR_DEVICE','cpu'), compute_type=os.environ.get('SHTAB_ASR_COMPUTE_TYPE','int8'), cpu_threads=2,
-                 num_workers=1, local_files_only=True)
+    verify_model(root)
     print('ASR already installed and loaded successfully', flush=True)
     raise SystemExit(0)
 root.mkdir(parents=True, exist_ok=True)
@@ -61,8 +79,7 @@ finally:
     stop.set()
     thread.join()
 progress.update(*measure(), phase='verify', force=True)
-WhisperModel(path, device=os.environ.get('SHTAB_ASR_DEVICE','cpu'), compute_type=os.environ.get('SHTAB_ASR_COMPUTE_TYPE','int8'), cpu_threads=2,
-             num_workers=1, local_files_only=True)
+verify_model(path)
 print('ASR downloaded and loaded successfully', flush=True)
 marker.write_text(json.dumps({'repository': repo, 'revision': revision}))
 
