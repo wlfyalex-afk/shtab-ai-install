@@ -23,16 +23,18 @@ function Assert-ShtabRoot([string]$Path) {
 function Get-WSLRegistrations {
     @(Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss' -ErrorAction SilentlyContinue | ForEach-Object { Get-ItemProperty $_.PSPath })
 }
-function Remove-OwnedTree([string]$Path) {
+function Remove-OwnedTree([string]$Path,[switch]$Top) {
     if (-not (Test-Path -LiteralPath $Path)) { return }
     # Enumerate children explicitly: never recurse through junctions/symlinks.
     foreach ($child in (Get-ChildItem -LiteralPath $Path -Force)) {
+        if ($Top -and $child.Name -eq 'installation.json') { continue }
         if ($child.Attributes -band [IO.FileAttributes]::ReparsePoint) {
             if ($child.PSIsContainer) { [IO.Directory]::Delete($child.FullName) } else { [IO.File]::Delete($child.FullName) }
         }
         elseif ($child.PSIsContainer) { Remove-OwnedTree $child.FullName }
         else { Remove-Item -LiteralPath $child.FullName -Force }
     }
+    if ($Top) { Remove-Item -LiteralPath (Join-Path $Path 'installation.json') -Force -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $Path -Force
 }
 $log=Join-Path $PSScriptRoot ('ShtabAI-cleanup-'+(Get-Date -Format yyyyMMdd-HHmmss)+'.log')
@@ -50,6 +52,7 @@ try {
         else { throw 'Не найдена установка. Укажите -InstallDir с её точной папкой.' }
     }
     $root=Assert-ShtabRoot $InstallDir
+    if ($PSScriptRoot -ieq $root -or $PSScriptRoot.StartsWith($root+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Сохраните скрипт очистки вне папки приложения, например D:\Temp.' }
     $passport=Join-Path $root 'installation.json'
     if (-not (Test-Path -LiteralPath $passport)) { throw 'Нет паспорта installation.json. Удалять папку вслепую нельзя.' }
     $manifest=Get-Content -LiteralPath $passport -Raw | ConvertFrom-Json
@@ -73,6 +76,7 @@ try {
     }
     Write-Host ('Удаляем тестовую установку: '+$root) -ForegroundColor Yellow
     Write-Host 'Будут удалены её Ubuntu, база данных, модели, службы, ярлыки и сетевые правила.'
+    Write-Host 'Закройте Far, Проводник и терминалы, работающие внутри папки приложения, чтобы они не удерживали файлы.'
     Write-Progress -Activity 'Очистка Штаб.AI' -Status 'Остановка собственной задачи и Ollama' -PercentComplete 10
     $scheduled=Get-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue
     if ($scheduled) { Stop-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName $task -Confirm:$false }
@@ -100,7 +104,7 @@ try {
     $config=Join-Path $env:USERPROFILE '.wslconfig'
     if ($manifest.WSLConfigCreated -and (Test-Path -LiteralPath $config) -and [IO.File]::ReadAllText($config) -ceq [string]$manifest.WSLConfigText) { Remove-Item -LiteralPath $config -Force }
     Write-Progress -Activity 'Очистка Штаб.AI' -Status 'Удаление файлов установки и моделей' -PercentComplete 60
-    Remove-OwnedTree $root
+    Remove-OwnedTree $root -Top
     Remove-Item -LiteralPath $record -Force -ErrorAction SilentlyContinue
     if ($backup) { Remove-OwnedTree $backup }
     elseif ($manifest.BackupPath) { Write-Host ('Резервные копии сохранены: '+$manifest.BackupPath) }

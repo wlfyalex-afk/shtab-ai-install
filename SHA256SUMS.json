@@ -1,7 +1,7 @@
 {
   ".github/workflows/validate.yml": "18f90c3b485dfd817dd32fc5a9484232c8bb1306c3cb2d87f8b20bfbb43931b8",
   ".gitignore": "1e18570d1f2d742831288a2b84c910d0a12b6ce9981bd47496085b04e7993f89",
-  "Cleanup-ShtabAI-RU.ps1": "28a135b41570bae50591a3ae925b879f1a7984dc495f56afc7c5fae4f7043170",
+  "Cleanup-ShtabAI-RU.ps1": "8f14174da6d8e767bf0718cdcb7e3eeedfe868525c6e464fae6539007d4e550a",
   "Install-ShtabAI-RU.ps1": "3aa2f5a5509050f32aa42a91e4bc7acf738c81ee4842d6bc8d10457ccbfb2020",
   "Install-ShtabAI-Ubuntu.sh": "29eb962b48047cfeccfa64b900685939ea3f758a77ac260729fe1fafd564f10b",
   "Install-ShtabAI-Windows.ps1": "40cb96ee4ae23825f997c3a21ac29f0d71a4a2fa93b0fdf8e50704872cd28ecc",
@@ -366,7 +366,7 @@
   "tests/Test-GPUSelection.ps1": "e28a3795e32fd6ffdb74fe62a44aa792da16e2d11ace7154fbf2a349e09511b9",
   "tests/Test-RuntimeNetwork.ps1": "edb9ea1f5fc20b52fa7c4f2999007c2f66d5caf659868d1edb8495e72c7e7ffc",
   "tests/Test-WSLProbe.ps1": "f5c78968c29379f5846a8b0f2263e6c5cb941a862b1d2bc24e5296299883b372",
-  "tests/test_acceleration021.py": "fbcdb425ebcf960e9762806da32b6f8ee6d736fddea56d629a59c0f358a44bdf",
+  "tests/test_acceleration021.py": "7823dcf6730d0a7ede6a5521c57a962a7b561e5017100aace44a07a8b2518bea",
   "tests/test_admin021.py": "c981bb4904254b272df1bf6814e92f2cf41fa72f40597dea8e6314e1f6887c23",
   "tests/test_cloud_download_timing.py": "27dfa297d6409e472b530217c5fa4c890d8d818c876d221bb58269d9e8817391",
   "tests/test_gpu_fallback.py": "eacfc749da0f3e45638877ae7e3e19076b38e0a1ef83a003dad814fffd7d5e7d",

@@ -37,20 +37,20 @@ class AccelerationTests(unittest.TestCase):
         module = runpy.run_path(str(ROOT/'scripts/ollama-api.py'))
         check = module['check']
         calls = Mock(side_effect=[{'done': True}, {'models': [{'name': 'qwen3:4b', 'size_vram': vram}] if loaded else []}, {'done': True}])
-        with patch.dict(check.__globals__, call=calls):
-            check('http://172.20.0.1:11435', acceleration)
+        with tempfile.TemporaryDirectory() as directory, patch.dict(check.__globals__, call=calls):
+            calls.result = check('http://172.20.0.1:11435', acceleration, Path(directory))
         return calls
 
-    def test_gpu_selection_rejects_silent_cpu_fallback(self):
+    def test_gpu_selection_records_cpu_fallback_instead_of_aborting(self):
         for mode in ('nvidia', 'amd'):
-            with self.assertRaisesRegex(RuntimeError, 'entirely on CPU'): self.probe(mode, 0)
+            self.assertEqual(self.probe(mode, 0).result, 20)
             calls = self.probe(mode, 1024)
             self.assertEqual(calls.call_args.args[1], '/api/generate')
             self.assertEqual(calls.call_args.args[2]['keep_alive'], 0)
 
     def test_cpu_probe_and_missing_model(self):
         self.probe('cpu', 0)
-        with self.assertRaisesRegex(RuntimeError, 'not loaded'): self.probe('cpu', 0, loaded=False)
+        with self.assertRaisesRegex(RuntimeError, 'не загружен'): self.probe('cpu', 0, loaded=False)
 
     def test_endpoint_uses_native_config_and_container_environment(self):
         module = runpy.run_path(str(ROOT/'scripts/ollama-api.py'))
@@ -63,3 +63,4 @@ class AccelerationTests(unittest.TestCase):
 
 
 if __name__ == '__main__': unittest.main()
+
