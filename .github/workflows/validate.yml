@@ -46,6 +46,9 @@ jobs:
       - name: Check installation stages and model progress using Windows PowerShell 5.1
         shell: powershell
         run: .\tests\Test-InstallationProgress.ps1
+      - name: Check virtualization before downloads using Windows PowerShell 5.1
+        shell: powershell
+        run: .\tests\Test-VirtualizationPreflight.ps1
       - name: Check 12 GB memory policy using Windows PowerShell 5.1
         shell: powershell
         run: .\tests\Test-MemoryLimits.ps1

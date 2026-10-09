@@ -76,6 +76,48 @@ function Install-ShtabWSLRuntime {
         Remove-Item -LiteralPath $directory -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
+function Invoke-ShtabBootConfiguration {
+    param([string[]]$Arguments)
+    $bcdedit=Join-Path $env:SystemRoot 'System32\bcdedit.exe'
+    if (-not [Environment]::Is64BitProcess) { $bcdedit=Join-Path $env:SystemRoot 'Sysnative\bcdedit.exe' }
+    $savedPreference=$ErrorActionPreference
+    try {
+        $ErrorActionPreference='Continue'
+        $output=(& $bcdedit @Arguments 2>&1 | Out-String)
+        $code=$LASTEXITCODE
+    } finally { $ErrorActionPreference=$savedPreference }
+    if ($code -ne 0) { throw "Не удалось проверить или изменить запуск гипервизора (код $code): $output" }
+    return $output
+}
+function Test-ShtabVirtualizationReady {
+    Write-Host 'Проверяем аппаратную виртуализацию и запуск гипервизора Windows...' -ForegroundColor Cyan
+    $computer=Get-CimInstance Win32_ComputerSystem
+    if ($computer.HypervisorPresent) {
+        Write-Host 'Гипервизор Windows запущен.' -ForegroundColor Green
+        return $true
+    }
+    $processors=@(Get-CimInstance Win32_Processor)
+    if (-not $processors.Count) { throw 'Не удалось получить сведения о виртуализации процессора.' }
+    foreach ($processor in $processors) {
+        if ($processor.SecondLevelAddressTranslationExtensions -eq $false) {
+            throw 'Процессор не предоставляет SLAT, необходимый для WSL2. В виртуальной машине включите вложенную виртуализацию на её хосте.'
+        }
+        if ($processor.VirtualizationFirmwareEnabled -eq $false) {
+            throw 'Виртуализация выключена в BIOS/UEFI или не предоставлена виртуальной машине. Включите SVM / AMD-V для AMD либо Intel Virtualization Technology / VT-x для Intel, сохраните настройки и перезагрузите компьютер. Проверка: Диспетчер задач → Производительность → ЦП → Виртуализация: включена. После этого запустите установщик снова.'
+        }
+        if ($null -eq $processor.VirtualizationFirmwareEnabled) {
+            throw 'Windows не сообщила состояние виртуализации. Проверьте Диспетчер задач → Производительность → ЦП и настройки BIOS/UEFI перед установкой WSL2.'
+        }
+    }
+    $boot=Invoke-ShtabBootConfiguration -Arguments @('/enum','{current}')
+    if ($boot -match '(?im)^\s*hypervisorlaunchtype\s+Off\s*$') {
+        [void](Invoke-ShtabBootConfiguration -Arguments @('/set','{current}','hypervisorlaunchtype','Auto'))
+        Write-Host 'Автоматический запуск гипервизора включён. Перезагрузите Windows и снова запустите установщик.' -ForegroundColor Yellow
+        return $false
+    }
+    Write-Host 'Виртуализация включена, но гипервизор ещё не запущен. Перезагрузите Windows и снова запустите установщик. Если сообщение повторяется после перезагрузки, проверьте BIOS/UEFI и вложенную виртуализацию; Ubuntu пока не скачивается.' -ForegroundColor Yellow
+    return $false
+}
 function Quote-Shell([string]$Value) {
     $q = [string][char]39
     return $q + $Value.Replace($q,($q + [char]34 + $q + [char]34 + $q)) + $q
@@ -118,6 +160,7 @@ foreach ($name in @('Microsoft-Windows-Subsystem-Linux','VirtualMachinePlatform'
 }
 if ($restart) { Write-Host 'Компоненты WSL включены. Перезагрузите Windows и снова запустите этот установщик.' -ForegroundColor Yellow; return }
 if (-not (Test-Path $script:wsl)) { throw 'Программа WSL недоступна. Перезагрузите Windows и повторите установку.' }
+if (-not (Test-ShtabVirtualizationReady)) { return }
 Write-Host 'Проверяем WSL...' -ForegroundColor Cyan
 if (-not (Test-WSLInstalled)) {
     Write-Host 'Устанавливаем WSL без стандартного дистрибутива Linux...' -ForegroundColor Cyan
