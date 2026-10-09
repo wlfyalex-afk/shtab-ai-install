@@ -2,7 +2,7 @@
   ".github/workflows/validate.yml": "c2dc31198e91a79de25f6e9477ba1d45802419b8cbdbbc5c7111fb0431dba89b",
   ".gitignore": "1e18570d1f2d742831288a2b84c910d0a12b6ce9981bd47496085b04e7993f89",
   "Install-ShtabAI-Ubuntu.sh": "29eb962b48047cfeccfa64b900685939ea3f758a77ac260729fe1fafd564f10b",
-  "Install-ShtabAI-Windows.ps1": "e16900f8caddc57b77c5b161f9b101c82cee7f69ee86733cc20f0891025ae5d7",
+  "Install-ShtabAI-Windows.ps1": "6dd9ecfb1e5117fe8643dae29c41f8c665e11c266efb54ec310a401b12fbfb5e",
   "LICENSE": "1d2f502ad72438816e4c0ffce242999fb1ce4da23acc8b7dd797cf141a261f73",
   "README.md": "121bf2696321e0de93eabf65f91aebed8d9aa1abaeb137040d574b3b07d03285",
   "ROADMAP.md": "516d68b1148f5e47cacfb0ba8e52368c68b8ca4247d06c8b91d306bc6bf4199e",

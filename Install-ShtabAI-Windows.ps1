@@ -6,7 +6,8 @@ param(
     [ValidateSet('ask','local','lan')][string]$Access='ask',
     [ValidateRange(1024,65535)][int]$HTTPSPort=8445,
     [ValidatePattern('^(main|[a-f0-9]{40})$')][string]$Revision='main',
-    [string]$InstallDir=''
+    [string]$InstallDir='',
+    [switch]$KeepWindowOpen
 )
 $ErrorActionPreference='Stop'
 try {
@@ -14,7 +15,7 @@ try {
     $principal=New-Object Security.Principal.WindowsPrincipal($identity)
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
         $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-        $arguments='-NoProfile -ExecutionPolicy Bypass -File "'+$PSCommandPath+'" -DistroName '+$DistroName+' -Acceleration '+$Acceleration+' -Access '+$Access+' -HTTPSPort '+$HTTPSPort+' -Revision '+$Revision
+        $arguments='-NoProfile -ExecutionPolicy Bypass -File "'+$PSCommandPath+'" -DistroName '+$DistroName+' -Acceleration '+$Acceleration+' -Access '+$Access+' -HTTPSPort '+$HTTPSPort+' -Revision '+$Revision+' -KeepWindowOpen'
         if ($InstallDir) {
             if ($InstallDir -match '["\r\n]' -or $InstallDir -notmatch '^[A-Za-z]:\\') { throw 'Use an absolute local installation path without quotes or newlines.' }
             $InstallDir=[IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
@@ -42,7 +43,10 @@ try {
         if ((Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Installer checksum mismatch.' }
         & $installer -DistroName $DistroName -Acceleration $Acceleration -Access $Access -HTTPSPort $HTTPSPort -Revision $Revision -InstallDir $InstallDir
     } finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
+    if ($KeepWindowOpen) { [void](Read-Host 'Press Enter to close this installation window') }
 } catch {
     Write-Host ('Installation stopped: '+$_.Exception.Message) -ForegroundColor Red
+    if ($_.InvocationInfo.PositionMessage) { Write-Host $_.InvocationInfo.PositionMessage -ForegroundColor Yellow }
+    if ($KeepWindowOpen) { [void](Read-Host 'Installation stopped. Copy the error above; press Enter to close') }
     exit 1
 }
