@@ -13,7 +13,7 @@ $ErrorActionPreference='Stop'
 function Receive-ShtabBootstrap {
     param([string]$BaseUri, [string]$Work, [string]$Checksums)
     # Keep the repository layout: Install-WSL dot-sources its GPU helper.
-    $required=@('windows/Install-WSL.ps1','windows/Test-ShtabGPU.ps1')
+    $required=@('windows/Install-WSL.ps1','windows/Test-ShtabGPU.ps1','windows/Install-Progress.ps1')
     $lines=@(Get-Content -LiteralPath $Checksums -Encoding UTF8)
     foreach ($relative in $required) {
         $pattern='^[a-f0-9]{64}  '+[regex]::Escape($relative)+'$'

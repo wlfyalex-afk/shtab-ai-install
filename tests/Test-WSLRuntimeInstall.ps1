@@ -16,6 +16,7 @@ try {
         param([switch]$UseBasicParsing,$Uri,$OutFile,$TimeoutSec)
         Set-Content -LiteralPath $OutFile -Value 'test package'
     }
+    function Receive-File { param($Uri,$OutFile) Invoke-WebRequest -Uri $Uri -OutFile $OutFile }
     function Get-AuthenticodeSignature {
         param($LiteralPath)
         [pscustomobject]@{Status=$script:signatureStatus;SignerCertificate=[pscustomobject]@{Subject='CN=Microsoft Corporation, O=Microsoft Corporation, C=US'}}

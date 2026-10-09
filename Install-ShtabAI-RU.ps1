@@ -334,7 +334,7 @@ function Install-ShtabWSLRuntime {
     $package=Join-Path $directory 'wsl.x64.msi'
     $log=Join-Path $env:TEMP ('ShtabAI-WSL-MSI-'+[guid]::NewGuid().ToString('N')+'.log')
     try {
-        Invoke-WebRequest -UseBasicParsing -Uri $uri -OutFile $package -TimeoutSec 600
+        Receive-File -Uri $uri -OutFile $package
         $signature=Get-AuthenticodeSignature -LiteralPath $package
         if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(^|,\s*)O=Microsoft Corporation(,|$)') {
             throw 'Не удалось проверить подпись Microsoft у пакета WSL MSI.'

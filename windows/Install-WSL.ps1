@@ -10,6 +10,7 @@ param(
     [string]$InstallDir = ''
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Install-Progress.ps1')
 . (Join-Path $PSScriptRoot 'Test-ShtabGPU.ps1')
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 function Invoke-WSL {
@@ -60,7 +61,7 @@ function Install-ShtabWSLRuntime {
     $package=Join-Path $directory 'wsl.x64.msi'
     $log=Join-Path $env:TEMP ('ShtabAI-WSL-MSI-'+[guid]::NewGuid().ToString('N')+'.log')
     try {
-        Invoke-WebRequest -UseBasicParsing -Uri $uri -OutFile $package -TimeoutSec 600
+        Receive-File -Uri $uri -OutFile $package
         $signature=Get-AuthenticodeSignature -LiteralPath $package
         if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(^|,\s*)O=Microsoft Corporation(,|$)') {
             throw 'Не удалось проверить подпись Microsoft у пакета WSL MSI.'
@@ -96,6 +97,7 @@ function Verify-Package([string]$Root) {
         if ($actual -ne $expected) { throw "Не совпала контрольная сумма: $relative" }
     }
 }
+Show-Stage 1 'Проверка компьютера и подготовка WSL'
 Write-Host 'Проверяем версию Windows, оперативную память и процессор...' -ForegroundColor Cyan
 $os = Get-CimInstance Win32_OperatingSystem
 if (-not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { throw 'Требуется 64-разрядная Windows x64.' }
@@ -131,7 +133,7 @@ if (Get-NetTCPConnection -LocalPort 18093 -State Listen -ErrorAction SilentlyCon
 if (Get-NetTCPConnection -LocalPort 11435 -State Listen -ErrorAction SilentlyContinue) { throw 'Порт Windows 11435 занят; для Ollama нужен отдельный свободный порт.' }
 $defaultRoot = Join-Path $env:LOCALAPPDATA ('ShtabAI\' + $DistroName)
 if (-not $InstallDir) {
-    Get-Volume | Where-Object DriveLetter | Select-Object -Property @('DriveLetter','FileSystem','SizeRemaining') | Format-Table -AutoSize | Out-Host
+    Show-Disks
     $InstallDir = Read-Host ("Папка установки (например D:\Apps\$DistroName) [$defaultRoot]")
     if (-not $InstallDir) { $InstallDir=$defaultRoot }
 }
@@ -211,9 +213,10 @@ if ($Revision -notmatch '^[a-f0-9]{40}$') { throw 'Не удалось опре�
 $work = Join-Path $ancestor ('shtab-wsl-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory $work | Out-Null
 try {
+    Show-Stage 2 'Загрузка и проверка пакета Штаб.AI'
     $archive = Join-Path $work 'source.zip'
     Write-Host "Скачиваем Штаб.AI, версия $Revision"
-    Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/wlfyalex-afk/shtab-ai-install/archive/$Revision.zip" -OutFile $archive
+    Receive-File -Uri "https://github.com/wlfyalex-afk/shtab-ai-install/archive/$Revision.zip" -OutFile $archive
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $zip = [IO.Compression.ZipFile]::OpenRead($archive)
     try {
@@ -226,17 +229,19 @@ try {
     if ($roots.Count -ne 1) { throw 'Некорректная структура архива приложения.' }
     $package = $roots[0].FullName
     Verify-Package $package
+    Show-Stage 3 'Загрузка и проверка Ubuntu'
     $image = Join-Path $work 'ubuntu.wsl'
     $imageName = 'ubuntu-24.04.5-wsl-amd64.wsl'
     $imageBase = 'https://releases.ubuntu.com/24.04/'
     $sums = Join-Path $work 'Ubuntu-SHA256SUMS'
-    Invoke-WebRequest -UseBasicParsing -Uri ($imageBase + 'SHA256SUMS') -OutFile $sums
+    Receive-File -Uri ($imageBase + 'SHA256SUMS') -OutFile $sums
     $text = [IO.File]::ReadAllText($sums,[Text.Encoding]::UTF8)
     $matches = [regex]::Matches($text,('(?im)^([a-f0-9]{64})[ \t]+\*?' + [regex]::Escape($imageName) + '[ \t]*\r?$'))
     if ($matches.Count -ne 1) { throw 'Контрольная сумма образа Ubuntu WSL недоступна.' }
     Write-Host 'Скачиваем образ Ubuntu 24.04 для WSL...'
-    Invoke-WebRequest -UseBasicParsing -Uri ($imageBase + $imageName) -OutFile $image
+    Receive-File -Uri ($imageBase + $imageName) -OutFile $image
     if ((Get-FileHash $image -Algorithm SHA256).Hash.ToLowerInvariant() -ne $matches[0].Groups[1].Value.ToLowerInvariant()) { throw 'Не совпала контрольная сумма образа Ubuntu.' }
+    Show-Stage 4 'Создание Linux-среды и проверка видеокарты'
     New-Item -ItemType Directory $root -Force | Out-Null
     $manifest = [ordered]@{ Product='ShtabAI'; Backend='WSL2'; DistroName=$DistroName; Root=$root; Revision=$Revision; HTTPSPort=$HTTPSPort; Shortcut=$shortcut; TaskName=('ShtabAI-' + $DistroName + '-Start'); CertificateThumbprint=''; WSLConfigCreated=$false; WSLConfigText=''; Acceleration=$Acceleration; Network=($Access -eq 'lan'); LANAddress=$lanAddress; LANInterfaceGuid=$(if ($Access -eq 'lan') { $adapters[$number-1].Guid } else { '' }); LANRule=('ShtabAI-' + $DistroName + '-LAN') }
     $manifestPath = Join-Path $root 'installation.json'
@@ -279,17 +284,19 @@ try {
         }
     }
     Write-Host 'Скачиваем Ollama для Windows (включая библиотеки видеокарт)...'
+    Show-Stage 5 'Установка Ollama и библиотек видеокарт'
     $ollamaZip = Join-Path $work 'ollama.zip'
-    Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-windows-amd64.zip' -OutFile $ollamaZip
+    Receive-File -Uri 'https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-windows-amd64.zip' -OutFile $ollamaZip
     if ((Get-FileHash $ollamaZip -Algorithm SHA256).Hash.ToLowerInvariant() -ne '428c94622a04764b318ddf13a061898edf69e32ffa896f638ed6015fd3f33288') { throw 'Не совпала контрольная сумма Ollama.' }
     $ollamaDir = Join-Path $root 'ollama'
     Expand-Archive -LiteralPath $ollamaZip -DestinationPath $ollamaDir
     if ($Acceleration -eq 'amd') {
         $rocmZip = Join-Path $work 'ollama-rocm.zip'
-        Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-windows-amd64-rocm.zip' -OutFile $rocmZip
+        Receive-File -Uri 'https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-windows-amd64-rocm.zip' -OutFile $rocmZip
         if ((Get-FileHash $rocmZip -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'a290510b3ee3b743de54eb3fbae99b69f19a49485f42ce6bcf4a1a6f86e4ba01') { throw 'Не совпала контрольная сумма библиотек AMD.' }
         Expand-Archive -LiteralPath $rocmZip -DestinationPath $ollamaDir -Force
     }
+    Show-Stage 6 'Настройка автозапуска, сети и запуск Ollama'
     Copy-Item -LiteralPath (Join-Path $package 'windows\Start-ShtabRuntime.ps1') -Destination $root
     Copy-Item -LiteralPath (Join-Path $package 'windows\Manage-ShtabAI.ps1') -Destination $root
     $runtime = Join-Path $root 'Start-ShtabRuntime.ps1'
@@ -314,6 +321,7 @@ try {
     $guestMode = if ($Acceleration -eq 'nvidia') { 'nvidia' } else { 'cpu' }
     $lanAddress = [string]$runtimeState.LANAddress
     $httpsHost = if ($lanAddress) { $lanAddress } else { 'localhost' }
+    Show-Stage 7 'Подготовка пакетов Ubuntu и запуск установки приложения'
     $guestArchive = (Invoke-Guest wslpath -u $archive | Out-String).Trim()
     $setup = 'set -euo pipefail; apt-get update; DEBIAN_FRONTEND=noninteractive apt-get install -y unzip python3 curl ca-certificates openssl; work=$(mktemp -d); trap ''rm -rf "$work"'' EXIT; unzip -q ' + (Quote-Shell $guestArchive) + ' -d "$work"; cd "$work"/*; sha256sum --quiet -c SHA256SUMS; SHTAB_EXTERNAL_OLLAMA_ENDPOINT=' + (Quote-Shell $runtimeState.Endpoint) + ' SHTAB_WINDOWS_ACCELERATION=' + $Acceleration + ' SHTAB_HTTPS_PORT=' + $HTTPSPort + ' bash install.sh ' + $httpsHost + ' ' + $guestMode
     Invoke-Guest /bin/bash -c $setup
@@ -325,12 +333,8 @@ try {
     do {
         $snapshot = (Invoke-Guest /usr/bin/python3 /opt/shtab-ai-021/scripts/install-progress.py --json | Out-String) | ConvertFrom-Json
         $status = [string]$snapshot.status
-        if ($status -in @('DOWNLOADING_QWEN','DOWNLOADING_WHISPER')) {
-            $description = Invoke-Guest /usr/bin/python3 /opt/shtab-ai-021/scripts/install-progress.py --once
-            Write-Host ($description | Out-String)
-        }
-        $elapsed = ((Get-Date) - $started).ToString('hh\:mm\:ss')
-        Write-Progress -Id 1 -Activity 'Shtab.AI installation' -Status "$status | elapsed $elapsed" -PercentComplete -1
+        Show-AppStage $status
+        if ($status -in @('DOWNLOADING_QWEN','DOWNLOADING_WHISPER')) { Show-ModelProgress $snapshot.progress } else { Write-Progress -Id 3 -Activity 'Загрузка модели' -Completed }
         if ($lastStatus -ne $status) { Invoke-Guest /opt/shtab-ai-021/shtabctl progress --once; $lastStatus=$status }
         if ($status -eq 'READY_FOR_ADMIN') { break }
         if ($status -like 'FAILED*' -or (Get-Date) -gt $deadline) {
@@ -339,6 +343,7 @@ try {
         }
         Start-Sleep -Seconds 10
     } while ($true)
+    Show-Stage 15 'Настройка сертификата HTTPS'
     Invoke-Guest /opt/shtab-ai-021/shtabctl certificate
     $cert = Join-Path $root 'shtab-ai-root.crt'
     $guestCert = (Invoke-Guest wslpath -u $cert | Out-String).Trim()
@@ -346,6 +351,7 @@ try {
     $imported = Import-Certificate -FilePath $cert -CertStoreLocation Cert:\CurrentUser\Root
     $manifest.CertificateThumbprint = $imported.Thumbprint
     Write-UTF8 $manifestPath ($manifest | ConvertTo-Json)
+    Show-Stage 16 'Создание администратора'
     Write-Host 'Создайте первого администратора (пароль не отображается при вводе):'
     Invoke-Guest /opt/shtab-ai-021/shtabctl bootstrap
     $url = "https://localhost:$HTTPSPort/login"
@@ -358,6 +364,7 @@ try {
     $managerLink.Description='Shtab.AI: backups, restore, status and service control'
     $managerLink.Save()
     # Check the Windows-to-WSL path with normal certificate validation.
+    Show-Stage 17 'Проверка страницы входа и сетевого доступа'
     $response = Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 15
     if ($response.StatusCode -ne 200) { throw 'Проверка страницы входа из Windows не пройдена.' }
     Write-Host "Штаб.AI готова: $url | режим ускорения: $Acceleration" -ForegroundColor Green
@@ -370,9 +377,11 @@ try {
         Write-Host "Адрес в сети: $networkURL. На других компьютерах добавьте сертификат в доверенные: $cert"
         Write-Host 'Проверьте вход и загрузку записи с другого компьютера: локальная проверка не проверяет его браузер и брандмауэр.'
     }
+    Complete-Stages
     Start-Process $url
 } finally {
-    Write-Progress -Id 1 -Activity 'Shtab.AI installation' -Completed
+    Write-Progress -Id 3 -Activity 'Загрузка модели' -Completed
+    Write-Progress -Id 1 -Activity 'Установка Штаб.AI' -Completed
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
 
