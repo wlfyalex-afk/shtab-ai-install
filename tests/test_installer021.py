@@ -114,7 +114,7 @@ class InstallerTests(unittest.TestCase):
             downloads = []
             api_calls = []
             class Api:
-                def model_info(self, repo):
+                def model_info(self, repo, **kwargs):
                     api_calls.append(repo)
                     return types.SimpleNamespace(sha='fixed-commit')
             def snapshot(**kw):
@@ -124,9 +124,10 @@ class InstallerTests(unittest.TestCase):
                 return kw['local_dir']
             def model(*a, **kw):
                 loads.append((a,kw))
+            sys.path.insert(0, str(ROOT/'scripts'))
             modules = {'huggingface_hub': types.SimpleNamespace(HfApi=Api,snapshot_download=snapshot),
                        'faster_whisper': types.SimpleNamespace(WhisperModel=model)}
-            with patch('pathlib.Path',redirected), patch.dict(sys.modules,modules):
+            with patch('pathlib.Path',redirected), patch.dict(sys.modules,modules), patch.dict(os.environ, {'SHTAB_PROGRESS_FILE': str(temp/'progress.json')}):
                 with self.assertRaisesRegex(RuntimeError,'network interrupted'):
                     runpy.run_path(str(ROOT/'scripts/download-asr.py'))
                 runpy.run_path(str(ROOT/'scripts/download-asr.py'))
@@ -145,9 +146,10 @@ class InstallerTests(unittest.TestCase):
             model_root.mkdir(parents=True)
             (model_root/'shtab-model.json').write_text('{}')
             def broken(*a,**kw): raise RuntimeError('corrupt model')
+            sys.path.insert(0, str(ROOT/'scripts'))
             modules = {'huggingface_hub': types.SimpleNamespace(HfApi=None,snapshot_download=None),
                        'faster_whisper': types.SimpleNamespace(WhisperModel=broken)}
-            with patch('pathlib.Path',lambda value: temp/str(value).lstrip('/')), patch.dict(sys.modules,modules):
+            with patch('pathlib.Path',lambda value: temp/str(value).lstrip('/')), patch.dict(sys.modules,modules), patch.dict(os.environ, {'SHTAB_PROGRESS_FILE': str(temp/'progress.json')}):
                 with self.assertRaisesRegex(RuntimeError,'corrupt model'):
                     runpy.run_path(str(ROOT/'scripts/download-asr.py'))
 
@@ -176,3 +178,4 @@ class InstallerTests(unittest.TestCase):
             self.assertTrue(all(p.returncode==0 for p in processes))
 
 if __name__ == '__main__': unittest.main()
+

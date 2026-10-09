@@ -40,6 +40,9 @@ jobs:
       - name: Check missing WSL probe using Windows PowerShell 5.1
         shell: powershell
         run: .\tests\Test-WSLProbe.ps1
+      - name: Check dynamic LAN configuration using Windows PowerShell 5.1
+        shell: powershell
+        run: .\tests\Test-RuntimeNetwork.ps1
       - name: Parse Windows menu commands
         shell: powershell
         run: |
@@ -51,3 +54,4 @@ jobs:
             [void][System.Management.Automation.Language.Parser]::ParseInput($command, [ref]$tokens, [ref]$parseErrors)
             if ($parseErrors.Count) { $parseErrors | Format-List; throw 'Menu command parse failed.' }
           }
+

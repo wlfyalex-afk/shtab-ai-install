@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 param([Parameter(Mandatory=$true)][string]$ManifestPath)
 $ErrorActionPreference='Stop'
 $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
@@ -21,23 +21,25 @@ function Sync-Certificate {
     & $wsl --distribution $manifest.DistroName --user root --exec /bin/cp /opt/shtab-ai-021/shtab-ai-root.crt $guestPath
     if ($LASTEXITCODE -ne 0) { throw 'Certificate copy failed.' }
     $imported=Import-Certificate -FilePath $cert -CertStoreLocation Cert:\CurrentUser\Root
+    $manifest=Get-Content $ManifestPath -Raw | ConvertFrom-Json
     $old=$manifest.CertificateThumbprint
     $manifest.CertificateThumbprint=$imported.Thumbprint
     [IO.File]::WriteAllText($ManifestPath,($manifest | ConvertTo-Json),(New-Object Text.UTF8Encoding($false)))
     if ($old -match '^[A-Fa-f0-9]{40}$' -and $old -ne $imported.Thumbprint) { Remove-Item ('Cert:\CurrentUser\Root\'+$old) -ErrorAction SilentlyContinue }
 }
 while ($true) {
+    $manifest=Get-Content $ManifestPath -Raw | ConvertFrom-Json
     Clear-Host
-    Write-Host ('Shtab.AI manager / '+$manifest.DistroName)
-    Write-Host '1 - Open application'
-    Write-Host '2 - Administration: backup, restore, users, status, logs'
-    Write-Host '3 - Start Shtab.AI'
-    Write-Host '4 - Stop Shtab.AI'
-    Write-Host '5 - Native Ollama log'
-    Write-Host '6 - LAN address and public certificate'
-    Write-Host '7 - Open backup folder (preserved after uninstall)'
-    Write-Host '0 - Exit'
-    $choice=Read-Host 'Select'
+    Write-Host ('Диспетчер Штаб.AI / '+$manifest.DistroName)
+    Write-Host '1 — Открыть приложение'
+    Write-Host '2 — Управление: копии, восстановление, пользователи и журналы'
+    Write-Host '3 — Запустить Штаб.AI'
+    Write-Host '4 — Остановить Штаб.AI'
+    Write-Host '5 — Журнал Ollama'
+    Write-Host '6 — Адрес в сети и публичный сертификат'
+    Write-Host '7 — Открыть папку резервных копий'
+    Write-Host '0 — Выход'
+    $choice=Read-Host 'Выберите пункт'
     switch ($choice) {
         '0' { exit }
         '1' { Start-Process ("https://localhost:$($manifest.HTTPSPort)/login") }
@@ -59,12 +61,13 @@ while ($true) {
         }
         '5' { Get-Content (Join-Path $manifest.Root 'ollama-error.log') -Tail 60 -ErrorAction SilentlyContinue }
         '6' {
-            if ($manifest.Network) { Write-Host ("LAN: https://$($manifest.LANAddress):$($manifest.HTTPSPort)/login") }
-            Write-Host ('Public certificate: '+(Join-Path $manifest.Root 'shtab-ai-root.crt'))
-            Write-Host 'On another Windows PC, import this certificate into Trusted Root Certification Authorities for the current user.'
+            if ($manifest.Network -and $manifest.LANAddress) { Write-Host ("LAN: https://$($manifest.LANAddress):$($manifest.HTTPSPort)/login") } else { Write-Host "Сетевой доступ сейчас недоступен; локальный адрес: https://localhost:$($manifest.HTTPSPort)/login" }
+            Write-Host ('Публичный сертификат: '+(Join-Path $manifest.Root 'shtab-ai-root.crt'))
+            Write-Host 'На другом компьютере Windows добавьте сертификат в доверенные корневые центры сертификации текущего пользователя.'
         }
         '7' { Start-Process explorer.exe -ArgumentList ('"'+$manifest.BackupPath+'"') }
-        default { Write-Host 'Invalid selection.' }
+        default { Write-Host 'Некорректный выбор.' }
     }
-    [void](Read-Host 'Press Enter')
+    [void](Read-Host 'Нажмите Enter')
 }
+

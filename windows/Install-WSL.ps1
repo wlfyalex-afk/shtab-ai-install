@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 #Requires -RunAsAdministrator
 [CmdletBinding()]
 param(
@@ -16,7 +16,20 @@ function Invoke-WSL {
     if ($LASTEXITCODE -ne 0) { throw "WSL command failed (code $LASTEXITCODE). Installation data preserved." }
 }
 function Invoke-Guest {
-    Invoke-WSL --distribution $DistroName --user root --exec @args
+    $guestArguments = @($args)
+    if ($guestArguments.Count -eq 3 -and $guestArguments[0] -eq '/bin/bash' -and $guestArguments[1] -eq '-c') {
+        $shellFile = Join-Path $work ('command-' + [guid]::NewGuid().ToString('N') + '.sh')
+        try {
+            [IO.File]::WriteAllText($shellFile, ($guestArguments[2] + "`n").Replace("`r`n","`n"), (New-Object Text.UTF8Encoding($false)))
+            $shellPath = (Invoke-WSL --distribution $DistroName --user root --exec /usr/bin/wslpath -u $shellFile | Out-String).Trim()
+            if (-not $shellPath.StartsWith('/')) { throw 'Не удалось определить Linux-путь служебного файла.' }
+            Invoke-WSL --distribution $DistroName --user root --exec /bin/bash $shellPath
+        } finally {
+            Remove-Item -LiteralPath $shellFile -Force -ErrorAction SilentlyContinue
+        }
+    } else {
+        Invoke-WSL --distribution $DistroName --user root --exec @guestArguments
+    }
 }
 function Test-WSLInstalled {
     # Windows PowerShell 5.1 turns redirected native stderr into errors.
@@ -136,7 +149,7 @@ if ($Access -eq 'ask') {
 $lanAddress = ''
 if ($Access -eq 'lan') {
     $adapters = @(Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -and $_.NetAdapter.Status -eq 'Up' -and $_.IPv4Address } | ForEach-Object {
-        [pscustomobject]@{Interface=$_.InterfaceAlias; IP=$_.IPv4Address[0].IPAddress; Index=$_.InterfaceIndex}
+        [pscustomobject]@{Interface=$_.InterfaceAlias; IP=$_.IPv4Address[0].IPAddress; Index=$_.InterfaceIndex; Guid=[string]$_.NetAdapter.InterfaceGuid}
     })
     if (-not $adapters.Count) { throw 'No active LAN interface with an IPv4 gateway. Select local access.' }
     for ($i=0; $i -lt $adapters.Count; $i++) { Write-Host "$($i+1) - $($adapters[$i].Interface) / $($adapters[$i].IP)" }
@@ -185,7 +198,7 @@ try {
     Invoke-WebRequest -UseBasicParsing -Uri ($imageBase + $imageName) -OutFile $image
     if ((Get-FileHash $image -Algorithm SHA256).Hash.ToLowerInvariant() -ne $matches[0].Groups[1].Value.ToLowerInvariant()) { throw 'Ubuntu image checksum mismatch.' }
     New-Item -ItemType Directory $root -Force | Out-Null
-    $manifest = [ordered]@{ Product='ShtabAI'; Backend='WSL2'; DistroName=$DistroName; Root=$root; Revision=$Revision; HTTPSPort=$HTTPSPort; Shortcut=$shortcut; TaskName=('ShtabAI-' + $DistroName + '-Start'); CertificateThumbprint=''; WSLConfigCreated=$false; WSLConfigText=''; Acceleration=$Acceleration; Network=($Access -eq 'lan'); LANAddress=$lanAddress; LANRule=('ShtabAI-' + $DistroName + '-LAN') }
+    $manifest = [ordered]@{ Product='ShtabAI'; Backend='WSL2'; DistroName=$DistroName; Root=$root; Revision=$Revision; HTTPSPort=$HTTPSPort; Shortcut=$shortcut; TaskName=('ShtabAI-' + $DistroName + '-Start'); CertificateThumbprint=''; WSLConfigCreated=$false; WSLConfigText=''; Acceleration=$Acceleration; Network=($Access -eq 'lan'); LANAddress=$lanAddress; LANInterfaceGuid=$(if ($Access -eq 'lan') { $adapters[$number-1].Guid } else { '' }); LANRule=('ShtabAI-' + $DistroName + '-LAN') }
     $manifestPath = Join-Path $root 'installation.json'
     Write-UTF8 $manifestPath ($manifest | ConvertTo-Json)
     New-Item -ItemType Directory (Split-Path $indexPath) -Force | Out-Null
@@ -204,7 +217,10 @@ try {
         Write-Host "Created WSL resource limit: $memoryGB GB RAM, $cores CPU. Existing WSL distributions are not stopped."
     }
     Invoke-WSL --import $DistroName (Join-Path $root 'distro') $image --version 2
-    Invoke-Guest /bin/bash -c 'printf "[boot]\nsystemd=true\n" > /etc/wsl.conf'
+    $configPath = "\\wsl.localhost\$DistroName\etc\wsl.conf"
+    $configText = "[boot]`nsystemd=true`n"
+    [IO.File]::WriteAllText($configPath,$configText,(New-Object Text.UTF8Encoding($false)))
+    if ([IO.File]::ReadAllText($configPath) -cne $configText) { throw 'WSL configuration verification failed.' }
     Invoke-WSL --terminate $DistroName
     $deadline = (Get-Date).AddMinutes(2)
     do {
@@ -256,7 +272,8 @@ try {
     }
     $runtimeState=Get-Content $stateFile -Raw | ConvertFrom-Json
     $guestMode = if ($Acceleration -eq 'nvidia') { 'nvidia' } else { 'cpu' }
-    $httpsHost = if ($manifest.Network) { $lanAddress } else { 'localhost' }
+    $lanAddress = [string]$runtimeState.LANAddress
+    $httpsHost = if ($lanAddress) { $lanAddress } else { 'localhost' }
     $guestArchive = (Invoke-Guest wslpath -u $archive | Out-String).Trim()
     $setup = 'set -euo pipefail; apt-get update; DEBIAN_FRONTEND=noninteractive apt-get install -y unzip python3 curl ca-certificates openssl; work=$(mktemp -d); trap ''rm -rf "$work"'' EXIT; unzip -q ' + (Quote-Shell $guestArchive) + ' -d "$work"; cd "$work"/*; sha256sum --quiet -c SHA256SUMS; SHTAB_EXTERNAL_OLLAMA_ENDPOINT=' + (Quote-Shell $runtimeState.Endpoint) + ' SHTAB_WINDOWS_ACCELERATION=' + $Acceleration + ' SHTAB_HTTPS_PORT=' + $HTTPSPort + ' bash install.sh ' + $httpsHost + ' ' + $guestMode
     Invoke-Guest /bin/bash -c $setup
@@ -266,7 +283,12 @@ try {
     $deadline = $started.AddHours(3)
     $lastStatus = ''
     do {
-        $status = (Invoke-Guest /bin/bash -c 'cat /var/lib/shtab-ai-021/status 2>/dev/null || echo STARTING' | Out-String).Trim()
+        $snapshot = (Invoke-Guest /usr/bin/python3 /opt/shtab-ai-021/scripts/install-progress.py --json | Out-String) | ConvertFrom-Json
+        $status = [string]$snapshot.status
+        if ($status -in @('DOWNLOADING_QWEN','DOWNLOADING_WHISPER')) {
+            $description = Invoke-Guest /usr/bin/python3 /opt/shtab-ai-021/scripts/install-progress.py --once
+            Write-Host ($description | Out-String)
+        }
         $elapsed = ((Get-Date) - $started).ToString('hh\:mm\:ss')
         Write-Progress -Id 1 -Activity 'Shtab.AI installation' -Status "$status | elapsed $elapsed" -PercentComplete -1
         if ($lastStatus -ne $status) { Invoke-Guest /opt/shtab-ai-021/shtabctl progress --once; $lastStatus=$status }
@@ -299,7 +321,9 @@ try {
     $response = Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 15
     if ($response.StatusCode -ne 200) { throw 'The Windows login page check failed.' }
     Write-Host "Shtab.AI ready: $url | acceleration: $Acceleration" -ForegroundColor Green
-    if ($manifest.Network) {
+    $currentManifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    $lanAddress = [string]$currentManifest.LANAddress
+    if ($manifest.Network -and $lanAddress) {
         $networkURL = "https://${lanAddress}:$HTTPSPort/login"
         $networkResponse = Invoke-WebRequest -UseBasicParsing -Uri $networkURL -TimeoutSec 15
         if ($networkResponse.StatusCode -ne 200) { throw 'LAN address check failed.' }
@@ -311,3 +335,4 @@ try {
     Write-Progress -Id 1 -Activity 'Shtab.AI installation' -Completed
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
+

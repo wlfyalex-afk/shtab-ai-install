@@ -55,12 +55,18 @@ dc run --rm --no-deps init-volumes
 dc up -d --wait --wait-timeout 240 db
 external=$(sed -n 's/^SHTAB_OLLAMA_ENDPOINT=//p' .env)
 if [[ -z $external ]]; then dc up -d --wait --wait-timeout 240 ollama; fi
+mkdir -p download-progress
+chown 10001:10001 download-progress
+chmod 755 download-progress
+ln -sfn /opt/shtab-ai-021/download-progress/qwen-progress.json "$state/qwen-progress.json"
+ln -sfn /opt/shtab-ai-021/download-progress/whisper-progress.json "$state/whisper-progress.json"
+rm -f download-progress/qwen-progress.json download-progress/whisper-progress.json
 stage DOWNLOADING_QWEN
 if [[ -n $external ]]; then
-    python3 scripts/ollama-api.py pull
+    SHTAB_PROGRESS_FILE="$PWD/download-progress/qwen-progress.json" python3 scripts/ollama-api.py pull
     python3 scripts/ollama-api.py check "$(cat windows-acceleration 2>/dev/null || echo cpu)"
 elif ! dc exec -T ollama ollama show qwen3:4b >/dev/null 2>&1; then
-    dc exec -T ollama ollama pull qwen3:4b
+    dc --profile setup run --rm qwen-download
 fi
 stage DOWNLOADING_WHISPER
 dc --profile setup run --rm asr-download
@@ -85,3 +91,4 @@ dc up -d --wait --wait-timeout 240 web meeting-worker llm-worker brief-worker pr
 bash scripts/check-https.sh
 stage READY_FOR_ADMIN
 echo 'Components ready. Create administrator: sudo /opt/shtab-ai-021/shtabctl bootstrap'
+

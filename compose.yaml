@@ -139,6 +139,19 @@ services:
     depends_on:
       db:
         condition: service_healthy
+  qwen-download:
+    <<: *app
+    profiles: [setup]
+    restart: 'no'
+    command: ['python', '-u', '/installer/ollama-api.py', 'pull']
+    environment:
+      <<: *env
+      SHTAB_PROGRESS_FILE: /progress/qwen-progress.json
+    volumes:
+      - ./scripts:/installer:ro
+      - ./download-progress:/progress
+    mem_limit: 256m
+    cpus: 0.5
   asr-download:
     <<: *app
     profiles: [setup]
@@ -147,10 +160,12 @@ services:
     environment:
       <<: *env
       HF_HUB_OFFLINE: '0'
+      SHTAB_PROGRESS_FILE: /progress/whisper-progress.json
     volumes:
       - app_data:/srv/shtab-ai
       - asr_models:/srv/shtab-ai/response-models
       - ./scripts:/installer:ro
+      - ./download-progress:/progress
     mem_limit: 6g
     cpus: ${SHTAB_ASR_CPUS:-2}
 
@@ -164,3 +179,4 @@ volumes:
   app_data:
   asr_models:
   ollama_models:
+

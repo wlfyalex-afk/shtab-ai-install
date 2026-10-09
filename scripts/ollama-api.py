@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import sys
 import urllib.request
+from model_progress import Reporter
 
 MODEL = 'qwen3:4b'
 
@@ -25,13 +26,22 @@ def call(base, path, body=None, stream=False):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     with opener.open(request, timeout=3600) as response:
         if stream:
+            progress = Reporter('qwen')
+            progress.update(detail='Получение списка файлов', force=True)
+            success = False
             for line in response:
                 event = json.loads(line)
                 if event.get('error'):
                     raise RuntimeError(event['error'])
+                success = event.get('status') == 'success'
                 total = event.get('total', 0)
                 done = event.get('completed', 0)
+                progress.update(done, total, ('Слой ' + event.get('digest', '').removeprefix('sha256:')[:12]) if total else 'Подготовка и проверка файлов')
                 print(event.get('status', ''), f'{done}/{total}' if total else '', flush=True)
+            if not success:
+                progress.update(phase='error', force=True)
+                raise RuntimeError('Ollama download ended without confirmation')
+            progress.update(phase='verify', force=True)
             return
         return json.load(response)
 
@@ -68,3 +78,4 @@ if __name__ == '__main__':
         print(json.dumps(call(base, '/api/tags'), ensure_ascii=False))
     else:
         raise SystemExit('Unknown Ollama action')
+

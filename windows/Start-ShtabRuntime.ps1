@@ -13,19 +13,84 @@ $keepalive = $null
 $server = $null
 $lastIP = ''
 $lastGateway = ''
+$lastForward = '__startup__'
+$previousLAN = [string]$manifest.LANAddress
 function Guest {
     & $wsl --distribution $manifest.DistroName --user root --exec @args
     if ($LASTEXITCODE -ne 0) { throw 'WSL runtime command failed.' }
 }
 function Write-State([string]$IP,[string]$Gateway) {
-    $json = @{ IP=$IP; Gateway=$Gateway; Endpoint=("http://${Gateway}:11435"); Ready=$true } | ConvertTo-Json
+    $json = @{ IP=$IP; Gateway=$Gateway; Endpoint=("http://${Gateway}:11435"); Ready=$true; LANAddress=$manifest.LANAddress; LANUrl=$(if ($manifest.LANAddress) { "https://$($manifest.LANAddress):$($manifest.HTTPSPort)/login" } else { "" }) } | ConvertTo-Json
     $temporary = Join-Path $root 'runtime-state.tmp'
     [IO.File]::WriteAllText($temporary,$json,(New-Object Text.UTF8Encoding($false)))
     Move-Item -LiteralPath $temporary -Destination (Join-Path $root 'runtime-state.json') -Force
 }
+function Current-LAN {
+    if (-not $manifest.Network) { return '' }
+    $configs = @(Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -and $_.NetAdapter.Status -eq 'Up' -and $_.IPv4Address })
+    if ($manifest.LANInterfaceGuid) {
+        $configs = @($configs | Where-Object { [string]$_.NetAdapter.InterfaceGuid -eq [string]$manifest.LANInterfaceGuid })
+    } else {
+        # Upgrade older manifests only when the original address or one unambiguous trusted adapter is available.
+        $original = @($configs | Where-Object { $_.IPv4Address.IPAddress -contains $manifest.LANAddress })
+        if ($original.Count -eq 1) { $configs = $original }
+    }
+    $trusted = @($configs | Where-Object {
+        $profiles = @(Get-NetConnectionProfile -InterfaceIndex $_.InterfaceIndex -ErrorAction SilentlyContinue)
+        $profiles.Count -eq 1 -and $profiles[0].NetworkCategory -in @('Private','DomainAuthenticated')
+    })
+    if ($trusted.Count -ne 1) { return '' }
+    $adapter = $trusted[0]
+    $manifest | Add-Member -NotePropertyName LANInterfaceGuid -NotePropertyValue ([string]$adapter.NetAdapter.InterfaceGuid) -Force
+    $addresses = @($adapter.IPv4Address | Where-Object { $_.IPAddress -notlike '169.254.*' -and $_.IPAddress -notlike '127.*' })
+    if (-not $addresses.Count) { return '' }
+    return [string]$addresses[0].IPAddress
+}
+function Sync-LAN([string]$IP) {
+    $listen = Current-LAN
+    $port = [int]$manifest.HTTPSPort
+    $key = "$listen/$IP"
+    if ($key -eq $script:lastForward) { return }
+    if ($script:previousLAN) {
+        & netsh.exe interface portproxy delete v4tov4 listenaddress=$script:previousLAN listenport=$port | Out-Null
+    }
+    Get-NetFirewallRule -Name $manifest.LANRule -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+    if ($listen) {
+        Start-Service iphlpsvc
+        & netsh.exe interface portproxy add v4tov4 listenaddress=$listen listenport=$port connectaddress=$IP connectport=$port | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot configure LAN forwarding.' }
+        New-NetFirewallRule -Name $manifest.LANRule -DisplayName ('ShtabAI LAN ' + $manifest.DistroName) -Group 'ShtabAI' -Direction Inbound -Action Allow -Protocol TCP -LocalAddress $listen -LocalPort $port -RemoteAddress LocalSubnet -Profile @('Private','Domain') | Out-Null
+    }
+    $manifest.LANAddress = $listen
+    # Reload fields that the manager may have changed (certificate, backup location).
+    $fresh = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
+    $fresh.LANAddress = $listen
+    if ($manifest.LANInterfaceGuid) { $fresh | Add-Member -NotePropertyName LANInterfaceGuid -NotePropertyValue $manifest.LANInterfaceGuid -Force }
+    $temp = $ManifestPath + '.runtime.tmp'
+    [IO.File]::WriteAllText($temp,($fresh | ConvertTo-Json),(New-Object Text.UTF8Encoding($false)))
+    Move-Item -LiteralPath $temp -Destination $ManifestPath -Force
+    $script:previousLAN = $listen
+    $script:lastForward = $key
+}
+function Sync-GuestConfig([string]$Gateway) {
+    $config = '/opt/shtab-ai-021/scripts/runtime-config.py'
+    & $wsl --distribution $manifest.DistroName --user root --exec /usr/bin/test -f $config
+    if ($LASTEXITCODE -ne 0) { return }
+    $hostName = if ($manifest.LANAddress) { $manifest.LANAddress } else { 'localhost' }
+    $changed = (Guest /usr/bin/python3 $config "http://${Gateway}:11435" $hostName | Out-String).Trim()
+    if ($changed -eq 'CHANGED') {
+        Guest /bin/systemctl start docker
+        Guest /bin/bash /opt/shtab-ai-021/scripts/dc.sh up -d --no-deps web meeting-worker llm-worker brief-worker proxy
+        Guest /bin/rm -f /opt/shtab-ai-021/.runtime-config-pending
+    }
+}
 try {
     $keepalive = Start-Process -FilePath $wsl -ArgumentList ('--distribution ' + $manifest.DistroName + ' --user root --exec /bin/sleep infinity') -WindowStyle Hidden -PassThru
     while ($true) {
+      try {
+        if ($keepalive.HasExited) {
+            $keepalive = Start-Process -FilePath $wsl -ArgumentList ('--distribution ' + $manifest.DistroName + ' --user root --exec /bin/sleep infinity') -WindowStyle Hidden -PassThru
+        }
         $ip = ((Guest /bin/hostname -I | Out-String).Trim() -split '\s+' | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' -and $_ -notlike '127.*' }) | Select-Object -First 1
         $route = (Guest /sbin/ip -4 route show default | Out-String).Trim()
         if ($route -notmatch '^default via (\d+\.\d+\.\d+\.\d+)') { throw 'WSL NAT gateway not found. This installer requires WSL NAT networking.' }
@@ -55,30 +120,15 @@ try {
                 try { $null = Invoke-RestMethod -Uri ("http://${gateway}:11435/api/version") -TimeoutSec 2; $ready=$true; break } catch { Start-Sleep -Seconds 2 }
             }
             if (-not $ready) { throw 'Native Ollama did not become ready.' }
-            if ($manifest.Network) {
-                Start-Service iphlpsvc
-                $listen = $manifest.LANAddress; $port = $manifest.HTTPSPort
-                & netsh.exe interface portproxy set v4tov4 listenaddress=$listen listenport=$port connectaddress=$ip connectport=$port | Out-Null
-                if ($LASTEXITCODE -ne 0) {
-                    & netsh.exe interface portproxy add v4tov4 listenaddress=$listen listenport=$port connectaddress=$ip connectport=$port | Out-Null
-                    if ($LASTEXITCODE -ne 0) { throw 'Cannot configure LAN forwarding.' }
-                }
-            }
-            # A WSL address can change after restart. Keep the installed endpoint current.
-            $update = 'import os; from pathlib import Path; p=Path("/opt/shtab-ai-021/.env"); endpoint="http://' + $gateway + ':11435"; lines=p.read_text().splitlines(); old=next((x.split("=",1)[1] for x in lines if x.startswith("SHTAB_OLLAMA_ENDPOINT=")),""); temp=p.with_suffix(".native.tmp"); temp.write_text("\n".join([x for x in lines if not x.startswith("SHTAB_OLLAMA_ENDPOINT=")]+["SHTAB_OLLAMA_ENDPOINT="+endpoint])+"\n"); temp.chmod(0o600); os.replace(temp,p); print("CHANGED" if old!=endpoint else "SAME")'
-            & $wsl --distribution $manifest.DistroName --user root --exec /usr/bin/test -f /opt/shtab-ai-021/.env
-            if ($LASTEXITCODE -eq 0) {
-                $changed = (Guest /usr/bin/python3 -c $update | Out-String).Trim()
-                $status = (Guest /bin/bash -c 'cat /var/lib/shtab-ai-021/status 2>/dev/null || true' | Out-String).Trim()
-                if ($changed -eq 'CHANGED' -and $status -eq 'READY_FOR_ADMIN') {
-                    Guest /bin/systemctl start docker
-                    Guest /bin/bash /opt/shtab-ai-021/scripts/dc.sh up -d --no-deps web meeting-worker llm-worker brief-worker
-                }
-            }
             $lastIP=$ip; $lastGateway=$gateway
-            Write-State $ip $gateway
         }
+        Sync-LAN $ip
+        Sync-GuestConfig $gateway
+        Write-State $ip $gateway
         if ($keepalive.HasExited) { throw 'WSL keepalive stopped.' }
+      } catch {
+        Add-Content -LiteralPath (Join-Path $root 'runtime-error.log') -Value ((Get-Date -Format o) + ' ' + $_.Exception.Message)
+      }
         Start-Sleep -Seconds 15
     }
 } finally {
@@ -86,3 +136,4 @@ try {
     if ($keepalive -and -not $keepalive.HasExited) { Stop-Process -Id $keepalive.Id -Force -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath (Join-Path $root 'runtime-state.json') -Force -ErrorAction SilentlyContinue
 }
+

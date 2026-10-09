@@ -5,6 +5,8 @@ import pathlib
 import subprocess
 import sys
 import time
+import json
+from model_progress import read_progress, describe
 
 STAGES = [
     ('INSTALLING_DEPENDENCIES', 'Установка зависимостей'),
@@ -43,6 +45,7 @@ def command(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--once', action='store_true', help='Показать один раз')
+    parser.add_argument('--json', action='store_true', help='Статус и сведения о модели в JSON')
     parser.add_argument('--state-file', default='/var/lib/shtab-ai-021/status')
     args = parser.parse_args()
     try:
@@ -51,9 +54,15 @@ def main():
                 status = pathlib.Path(args.state_file).read_text().strip()
             except FileNotFoundError:
                 status = ''
+            progress = read_progress(pathlib.Path(args.state_file).parent, status)
+            if args.json:
+                print(json.dumps(dict(status=status, progress=progress), ensure_ascii=False))
+                break
             if sys.stdout.isatty() and not args.once:
                 print('\033[2J\033[H', end='')
             print(render(status))
+            if status in ('DOWNLOADING_QWEN', 'DOWNLOADING_WHISPER'):
+                print('\n' + describe(progress))
             print('\nСлужба:')
             print(command(['systemctl', 'show', 'shtab-ai-install.service', '-p', 'ActiveState', '-p', 'SubState', '-p', 'Result']))
             print('\nПоследние сообщения:')
@@ -67,3 +76,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
