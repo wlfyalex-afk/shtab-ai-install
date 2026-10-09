@@ -52,13 +52,30 @@ files = metadata.get('files', [])
 stop = threading.Event()
 def measure():
     completed = 0
+    cache = root / '.cache/huggingface/download'
     for item in files:
         final = root / item['name']
-        partial = root / '.cache/huggingface/download' / (item['name'] + '.' + str(item['etag']) + '.incomplete')
+        size = 0
         try:
-            completed += min(item['size'], final.stat().st_size if final.is_file() else partial.stat().st_size)
+            if final.is_file():
+                size = final.stat().st_size
+            else:
+                # HF Hub may encode the filename and append a random suffix.
+                # Match the exact etag segment, not a guessed temporary name.
+                etag = str(item.get('etag') or '').strip(chr(34))
+                if etag:
+                    for partial in cache.rglob('*.incomplete'):
+                        if '.' + etag + '.' in partial.name:
+                            try:
+                                size = max(size, partial.stat().st_size)
+                            except FileNotFoundError:
+                                pass
+                # The downloader may rename the partial while we inspect it.
+                if final.is_file():
+                    size = max(size, final.stat().st_size)
         except FileNotFoundError:
             pass
+        completed += min(item['size'], size)
     return completed, sum(item['size'] for item in files)
 def monitor():
     while not stop.is_set():
