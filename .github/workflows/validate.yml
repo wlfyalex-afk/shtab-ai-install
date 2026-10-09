@@ -43,6 +43,9 @@ jobs:
       - name: Check complete bootstrap download using Windows PowerShell 5.1
         shell: powershell
         run: .\tests\Test-BootstrapDownload.ps1
+      - name: Check 12 GB memory policy using Windows PowerShell 5.1
+        shell: powershell
+        run: .\tests\Test-MemoryLimits.ps1
       - name: Check dynamic LAN configuration using Windows PowerShell 5.1
         shell: powershell
         run: .\tests\Test-RuntimeNetwork.ps1

@@ -346,7 +346,7 @@ $os = Get-CimInstance Win32_OperatingSystem
 if (-not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { throw 'Требуется 64-разрядная Windows x64.' }
 if ($os.ProductType -eq 1 -and [int]$os.BuildNumber -lt 19045) { throw 'Требуется Windows 10 22H2 или Windows 11.' }
 if ($os.ProductType -ne 1) { throw 'Эта версия рассчитана на Windows 10/11; Windows Server не поддерживается.' }
-if ((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory -lt 16106127360) { throw 'Требуется не менее 16 ГБ оперативной памяти; рекомендуется 24 ГБ и более.' }
+if ((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory -lt 11811160064) { throw 'Требуется не менее 12 ГБ оперативной памяти; рекомендуется 16–24 ГБ и более.' }
 if ([Environment]::ProcessorCount -lt 4) { throw 'Требуется не менее 4 логических ядер процессора.' }
 $script:wsl = Join-Path $env:SystemRoot 'System32\wsl.exe'
 if (-not [Environment]::Is64BitProcess) { $script:wsl = Join-Path $env:SystemRoot 'Sysnative\wsl.exe' }
@@ -511,7 +511,8 @@ try {
         Write-UTF8 $manifestPath ($manifest | ConvertTo-Json)
     }
     if (-not (Test-Path $wslConfig)) {
-        $memoryGB = [Math]::Max(10,[Math]::Floor((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1073741824)-6)
+        $hostMemory = (Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory
+        $memoryGB = if ($hostMemory -lt 16106127360) { 8 } else { [Math]::Max(10,[Math]::Floor($hostMemory/1073741824)-6) }
         $cores = [Environment]::ProcessorCount
         $manifest.WSLConfigText = "[wsl2]`nmemory=${memoryGB}GB`nprocessors=$cores`nswap=4GB`nlocalhostForwarding=true`nnetworkingMode=nat`n"
         Write-UTF8 $wslConfig $manifest.WSLConfigText

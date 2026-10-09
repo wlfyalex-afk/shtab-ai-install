@@ -6,7 +6,10 @@ source /etc/os-release
 [[ $(uname -m) == x86_64 ]] || { echo 'Requires amd64'; exit 1; }
 [[ $(nproc) -ge 4 ]] || { echo 'Requires at least 4 vCPU'; exit 1; }
 mem=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
-[[ $mem -ge 10000000 ]] || { echo 'Requires at least 10 GB RAM; VM target 12 GB'; exit 1; }
+# Windows runs Ollama on the host, so its WSL guest can use 8 GB.
+minimum_memory=10000000
+if [[ -n ${SHTAB_EXTERNAL_OLLAMA_ENDPOINT:-} ]]; then minimum_memory=8000000; fi
+[[ $mem -ge $minimum_memory ]] || { echo "Requires at least $minimum_memory KiB RAM (8 GB with host Ollama; otherwise 10 GB)"; exit 1; }
 space_target=/opt
 [[ ! -f /opt/shtab-ai-021/storage.json ]] || space_target=/opt/shtab-ai-021
 free=$(df -Pk "$space_target" | awk 'NR==2 {print $4}')
