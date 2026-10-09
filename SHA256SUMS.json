@@ -2,9 +2,9 @@
   ".github/workflows/validate.yml": "81cab0e3c98e2983b71cb27b0dd04d5833ae1a2da3492ca4ea895d78beeb91a4",
   ".gitignore": "1e18570d1f2d742831288a2b84c910d0a12b6ce9981bd47496085b04e7993f89",
   "Install-ShtabAI-Ubuntu.sh": "29eb962b48047cfeccfa64b900685939ea3f758a77ac260729fe1fafd564f10b",
-  "Install-ShtabAI-Windows.ps1": "6dd9ecfb1e5117fe8643dae29c41f8c665e11c266efb54ec310a401b12fbfb5e",
+  "Install-ShtabAI-Windows.ps1": "40cb96ee4ae23825f997c3a21ac29f0d71a4a2fa93b0fdf8e50704872cd28ecc",
   "LICENSE": "1d2f502ad72438816e4c0ffce242999fb1ce4da23acc8b7dd797cf141a261f73",
-  "README.md": "121bf2696321e0de93eabf65f91aebed8d9aa1abaeb137040d574b3b07d03285",
+  "README.md": "8af212ae93297b77838e4497158ecc08d0d7558d41ad6d4e9c9fd94877fde085",
   "ROADMAP.md": "516d68b1148f5e47cacfb0ba8e52368c68b8ca4247d06c8b91d306bc6bf4199e",
   "Uninstall-ShtabAI-Ubuntu.sh": "d2c12530a81d5fc9a43c07df07fcd69ef9230d1ad3c52ecef32297a5bc6b12ea",
   "Uninstall-ShtabAI-Windows.ps1": "4d81f0aa32d02f2fbc2614650c5cec2677987bb9815fc42cb94c5006fc546677",
@@ -364,7 +364,7 @@
   "tests/test_storage021.py": "4b50f6cca9c3442224154a34d90a76b710571b66d456d0804f22d14eee72f583",
   "tests/test_user_position021.py": "c4dac6163f816b4c1d96b76813f51669798c9e0f4d96de8eff5beee6c0f0ac7e",
   "uninstall.sh": "923cecec626dbe7847491efea38531044efa568b14c212445b6d2a9ab0b0f3d7",
-  "windows/Install-WSL.ps1": "c3b91cfd011f9822a971b4eba423dc68f99cbd05b11d80424cec54a3827f4c72",
+  "windows/Install-WSL.ps1": "022e1ab4c21ae44e61c6893f2f1638343e70f6e23ca76e19845bff2abdd84abb",
   "windows/Manage-ShtabAI.ps1": "2bf742093482668b28bc98541b0d9db39bf75c89b45de88392a9ee4c4120e09a",
   "windows/Start-ShtabRuntime.ps1": "b889123131efe0d02346f2762a47c3e4e932e1e1427225b6767392b90d0a2268"
 }

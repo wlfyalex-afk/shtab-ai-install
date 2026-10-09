@@ -40,7 +40,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-ShtabAI-Window
 Или скачайте и запустите из PowerShell одной командой:
 
 ```powershell
-Invoke-WebRequest -UseBasicParsing https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Install-ShtabAI-Windows.ps1 -OutFile Install-ShtabAI-Windows.ps1; powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-ShtabAI-Windows.ps1
+& { $ErrorActionPreference='Stop'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Write-Host 'Downloading Shtab.AI installer...'; $p=Join-Path $env:TEMP 'Install-ShtabAI-Windows.ps1'; Invoke-WebRequest -UseBasicParsing -TimeoutSec 60 'https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Install-ShtabAI-Windows.ps1' -OutFile $p; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $p -KeepWindowOpen }
 ```
 
 Будет создан собственный дистрибутив `ShtabAI-021` в WSL2. Docker работает внутри него; Docker Desktop и отдельная Hyper-V VM не нужны. WSL2 использует системную виртуализацию и компонент VirtualMachinePlatform, полный компонент Hyper-V не устанавливается. **Ollama работает нативно в Windows**, отдельно от WSL, и использует выбранный GPU. Установщик не подменяет другую установленную Ollama.

@@ -11,6 +11,7 @@ param(
 )
 $ErrorActionPreference='Stop'
 try {
+    Write-Host 'Shtab.AI installer started.' -ForegroundColor Cyan
     $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
     $principal=New-Object Security.Principal.WindowsPrincipal($identity)
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -21,12 +22,14 @@ try {
             $InstallDir=[IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
             $arguments+=' -InstallDir "'+$InstallDir+'"'
         }
+        Write-Host 'Requesting administrator access. Continue in the new installation window.' -ForegroundColor Yellow
         $process=Start-Process $powershell -Verb RunAs -ArgumentList $arguments -Wait -PassThru
         exit $process.ExitCode
     }
     [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
     if ($Revision -eq 'main') {
-        $Revision=(Invoke-RestMethod -Uri 'https://api.github.com/repos/wlfyalex-afk/shtab-ai-install/commits/main' -Headers @{'User-Agent'='ShtabAI-Installer'}).sha
+        Write-Host '[1/4] Checking the current release on api.github.com (timeout: 60 seconds)...' -ForegroundColor Cyan
+        $Revision=(Invoke-RestMethod -Uri 'https://api.github.com/repos/wlfyalex-afk/shtab-ai-install/commits/main' -Headers @{'User-Agent'='ShtabAI-Installer'} -TimeoutSec 60).sha
     }
     if ($Revision -notmatch '^[a-f0-9]{40}$') { throw 'Cannot resolve application revision.' }
     $work=Join-Path $env:TEMP ('shtab-launcher-'+[guid]::NewGuid().ToString('N'))
@@ -35,12 +38,15 @@ try {
         $base="https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/$Revision/"
         $sums=Join-Path $work 'SHA256SUMS'
         $installer=Join-Path $work 'Install-WSL.ps1'
-        Invoke-WebRequest -UseBasicParsing -Uri ($base+'SHA256SUMS') -OutFile $sums
+        Write-Host '[2/4] Downloading checksums from raw.githubusercontent.com (timeout: 60 seconds)...' -ForegroundColor Cyan
+        Invoke-WebRequest -UseBasicParsing -Uri ($base+'SHA256SUMS') -OutFile $sums -TimeoutSec 60
         $entry=@(Get-Content $sums -Encoding UTF8 | Where-Object { $_ -match '^[a-f0-9]{64}  windows/Install-WSL\.ps1$' })
         if ($entry.Count -ne 1) { throw 'Installer checksum missing.' }
         $expected=($entry[0] -split '  ',2)[0]
-        Invoke-WebRequest -UseBasicParsing -Uri ($base+'windows/Install-WSL.ps1') -OutFile $installer
+        Write-Host '[3/4] Downloading the Windows installer (timeout: 60 seconds)...' -ForegroundColor Cyan
+        Invoke-WebRequest -UseBasicParsing -Uri ($base+'windows/Install-WSL.ps1') -OutFile $installer -TimeoutSec 60
         if ((Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Installer checksum mismatch.' }
+        Write-Host '[4/4] Installer verified. Checking Windows and preparing WSL...' -ForegroundColor Cyan
         & $installer -DistroName $DistroName -Acceleration $Acceleration -Access $Access -HTTPSPort $HTTPSPort -Revision $Revision -InstallDir $InstallDir
     } finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
     if ($KeepWindowOpen) { [void](Read-Host 'Press Enter to close this installation window') }

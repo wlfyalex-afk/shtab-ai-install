@@ -52,6 +52,7 @@ function Verify-Package([string]$Root) {
         if ($actual -ne $expected) { throw "Checksum mismatch: $relative" }
     }
 }
+Write-Host 'Checking Windows edition, RAM and CPU...' -ForegroundColor Cyan
 $os = Get-CimInstance Win32_OperatingSystem
 if (-not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { throw 'Windows x64 is required.' }
 if ($os.ProductType -eq 1 -and [int]$os.BuildNumber -lt 19045) { throw 'Requires Windows 10 22H2 or Windows 11 (Home/Pro/Enterprise/Education).' }
@@ -62,6 +63,7 @@ $script:wsl = Join-Path $env:SystemRoot 'System32\wsl.exe'
 if (-not [Environment]::Is64BitProcess) { $script:wsl = Join-Path $env:SystemRoot 'Sysnative\wsl.exe' }
 $restart = $false
 foreach ($name in @('Microsoft-Windows-Subsystem-Linux','VirtualMachinePlatform')) {
+    Write-Host ("Checking Windows component: $name (this may take several minutes)...") -ForegroundColor Cyan
     $feature = Get-WindowsOptionalFeature -Online -FeatureName $name
     if ($feature.State -ne 'Enabled') {
         $result = Enable-WindowsOptionalFeature -Online -FeatureName $name -All -NoRestart
@@ -70,12 +72,14 @@ foreach ($name in @('Microsoft-Windows-Subsystem-Linux','VirtualMachinePlatform'
 }
 if ($restart) { Write-Host 'WSL components enabled. Restart Windows and repeat the same installation command.' -ForegroundColor Yellow; return }
 if (-not (Test-Path $script:wsl)) { throw 'WSL executable is unavailable. Restart Windows and repeat installation.' }
+Write-Host 'Checking WSL runtime...' -ForegroundColor Cyan
 if (-not (Test-WSLInstalled)) {
     Write-Host 'Installing WSL runtime (no default Linux distribution)...' -ForegroundColor Cyan
     Invoke-WSL --install --no-distribution --web-download
     Write-Host 'WSL installed. Restart Windows and repeat installation.' -ForegroundColor Yellow
     return
 }
+Write-Host 'Updating WSL runtime...' -ForegroundColor Cyan
 Invoke-WSL --update --web-download
 if ($DistroName -in @(Read-Distros)) { throw "Distribution $DistroName already exists. Use the uninstaller before a clean installation." }
 if (Get-NetTCPConnection -LocalPort $HTTPSPort -State Listen -ErrorAction SilentlyContinue) { throw "Windows port $HTTPSPort is occupied." }
