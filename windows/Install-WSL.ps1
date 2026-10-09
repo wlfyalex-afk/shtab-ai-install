@@ -18,6 +18,19 @@ function Invoke-WSL {
 function Invoke-Guest {
     Invoke-WSL --distribution $DistroName --user root --exec @args
 }
+function Test-WSLInstalled {
+    # Windows PowerShell 5.1 turns redirected native stderr into errors.
+    # Missing WSL is an expected probe result; use its exit code instead.
+    $savedPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $null = & $script:wsl --version 2>$null
+        $versionExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $savedPreference
+    }
+    return ($versionExitCode -eq 0)
+}
 function Quote-Shell([string]$Value) {
     $q = [string][char]39
     return $q + $Value.Replace($q,($q + [char]34 + $q + [char]34 + $q)) + $q
@@ -57,8 +70,8 @@ foreach ($name in @('Microsoft-Windows-Subsystem-Linux','VirtualMachinePlatform'
 }
 if ($restart) { Write-Host 'WSL components enabled. Restart Windows and repeat the same installation command.' -ForegroundColor Yellow; return }
 if (-not (Test-Path $script:wsl)) { throw 'WSL executable is unavailable. Restart Windows and repeat installation.' }
-$version = & $script:wsl --version 2>$null
-if ($LASTEXITCODE -ne 0) {
+if (-not (Test-WSLInstalled)) {
+    Write-Host 'Installing WSL runtime (no default Linux distribution)...' -ForegroundColor Cyan
     Invoke-WSL --install --no-distribution --web-download
     Write-Host 'WSL installed. Restart Windows and repeat installation.' -ForegroundColor Yellow
     return

@@ -37,3 +37,6 @@ jobs:
             [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$parseErrors)
             if ($parseErrors.Count) { $parseErrors | Format-List; throw "Parse failed: $($_.FullName)" }
           }
+      - name: Check missing WSL probe using Windows PowerShell 5.1
+        shell: powershell
+        run: .\tests\Test-WSLProbe.ps1
