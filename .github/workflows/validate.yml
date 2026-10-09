@@ -40,3 +40,14 @@ jobs:
       - name: Check missing WSL probe using Windows PowerShell 5.1
         shell: powershell
         run: .\tests\Test-WSLProbe.ps1
+      - name: Parse Windows menu commands
+        shell: powershell
+        run: |
+          $commands = @(Get-Content Start-ShtabAI-Windows.cmd | Where-Object { $_ -match '^powershell.exe .* -Command "(.+)"$' } | ForEach-Object { [regex]::Match($_, '-Command "(.+)"$').Groups[1].Value })
+          if ($commands.Count -ne 2) { throw 'Expected install and uninstall commands.' }
+          foreach ($command in $commands) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseInput($command, [ref]$tokens, [ref]$parseErrors)
+            if ($parseErrors.Count) { $parseErrors | Format-List; throw 'Menu command parse failed.' }
+          }

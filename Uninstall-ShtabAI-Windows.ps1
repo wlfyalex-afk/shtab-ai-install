@@ -1,13 +1,13 @@
 #Requires -Version 5.1
 [CmdletBinding()]
-param([ValidatePattern('^ShtabAI-[A-Za-z0-9-]+$')][string]$DistroName,[switch]$ListOnly)
+param([ValidatePattern('^ShtabAI-[A-Za-z0-9-]+$')][string]$DistroName,[switch]$ListOnly,[switch]$KeepWindowOpen)
 $ErrorActionPreference='Stop'
 try {
     $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
     $principal=New-Object Security.Principal.WindowsPrincipal($identity)
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
         $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-        $arguments='-NoProfile -ExecutionPolicy Bypass -File "'+$PSCommandPath+'"'
+        $arguments='-NoProfile -ExecutionPolicy Bypass -File "'+$PSCommandPath+'" -KeepWindowOpen'
         if ($DistroName) { $arguments+=' -DistroName '+$DistroName }
         if ($ListOnly) { $arguments+=' -ListOnly' }
         $process=Start-Process $powershell -Verb RunAs -ArgumentList $arguments -Wait -PassThru
@@ -121,4 +121,8 @@ try {
 } catch {
     Write-Host ('Removal stopped: '+$_.Exception.Message) -ForegroundColor Red
     exit 1
+} finally {
+    if ($KeepWindowOpen -and $principal -and $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        [void](Read-Host 'Press Enter to close this removal window')
+    }
 }

@@ -7,6 +7,8 @@
 | Windows Home / Pro | [Install-ShtabAI-Windows.ps1](Install-ShtabAI-Windows.ps1) | [Uninstall-ShtabAI-Windows.ps1](Uninstall-ShtabAI-Windows.ps1) |
 | Ubuntu | [Install-ShtabAI-Ubuntu.sh](Install-ShtabAI-Ubuntu.sh) | [Uninstall-ShtabAI-Ubuntu.sh](Uninstall-ShtabAI-Ubuntu.sh) |
 
+Для Windows доступно меню в одном файле: [Start-ShtabAI-Windows.cmd](https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Start-ShtabAI-Windows.cmd). Сохраните файл и запустите двойным щелчком: **1** — установка с выбором папки, CPU/GPU и доступа по сети, **2** — удаление выбранной установки, **0** — выход. Файл скачивает актуальные скрипты; требуется интернет. Если WSL устанавливается впервые, перезагрузите Windows по сообщению установщика и снова выберите **1**. Удаление сохраняет WSL и другие приложения; перед удалением данных требуется явное подтверждение.
+
 Установщик предлагает процессор Intel/AMD, NVIDIA или AMD Radeon; локальный доступ или доступ из локальной сети. Затем скачивает компоненты и модели, проверяет их, предлагает создать первого администратора и создаёт ярлыки приложения и диспетчера. Интернет нужен при установке. Модели Qwen3 4B и Whisper large-v3-turbo выполняются на вашем компьютере.
 
 ## Требования
