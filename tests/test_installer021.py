@@ -127,7 +127,7 @@ class InstallerTests(unittest.TestCase):
             sys.path.insert(0, str(ROOT/'scripts'))
             modules = {'huggingface_hub': types.SimpleNamespace(HfApi=Api,snapshot_download=snapshot),
                        'faster_whisper': types.SimpleNamespace(WhisperModel=model)}
-            with patch('pathlib.Path',redirected), patch.dict(sys.modules,modules), patch.dict(os.environ, {'SHTAB_PROGRESS_FILE': str(temp/'progress.json')}):
+            with patch('pathlib.Path',redirected), patch.dict(sys.modules,modules), patch.dict(os.environ, {'SHTAB_PROGRESS_FILE': str(temp/'progress.json')}), patch('model_progress.Path', lambda value: temp/'progress.json'):
                 with self.assertRaisesRegex(RuntimeError,'network interrupted'):
                     runpy.run_path(str(ROOT/'scripts/download-asr.py'))
                 runpy.run_path(str(ROOT/'scripts/download-asr.py'))
@@ -149,7 +149,7 @@ class InstallerTests(unittest.TestCase):
             sys.path.insert(0, str(ROOT/'scripts'))
             modules = {'huggingface_hub': types.SimpleNamespace(HfApi=None,snapshot_download=None),
                        'faster_whisper': types.SimpleNamespace(WhisperModel=broken)}
-            with patch('pathlib.Path',lambda value: temp/str(value).lstrip('/')), patch.dict(sys.modules,modules), patch.dict(os.environ, {'SHTAB_PROGRESS_FILE': str(temp/'progress.json')}):
+            with patch('pathlib.Path',lambda value: temp/str(value).lstrip('/')), patch.dict(sys.modules,modules), patch.dict(os.environ, {'SHTAB_PROGRESS_FILE': str(temp/'progress.json')}), patch('model_progress.Path', lambda value: temp/'progress.json'):
                 with self.assertRaisesRegex(RuntimeError,'corrupt model'):
                     runpy.run_path(str(ROOT/'scripts/download-asr.py'))
 
