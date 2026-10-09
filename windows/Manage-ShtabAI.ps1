@@ -10,16 +10,16 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     exit
 }
 $manifest=Get-Content $ManifestPath -Raw | ConvertFrom-Json
-if ($manifest.Product -ne 'ShtabAI' -or $manifest.DistroName -notmatch '^ShtabAI-[A-Za-z0-9-]+$') { throw 'Invalid installation.' }
+if ($manifest.Product -ne 'ShtabAI' -or $manifest.DistroName -notmatch '^ShtabAI-[A-Za-z0-9-]+$') { throw 'Некорректная установка.' }
 $wsl=Join-Path $env:SystemRoot 'System32\wsl.exe'
 function Sync-Certificate {
     & $wsl --distribution $manifest.DistroName --user root --exec /opt/shtab-ai-021/shtabctl certificate
-    if ($LASTEXITCODE -ne 0) { throw 'Certificate export failed.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Не удалось экспортировать сертификат.' }
     $cert=Join-Path $manifest.Root 'shtab-ai-root.crt'
     $guestPath=((& $wsl --distribution $manifest.DistroName --user root --exec wslpath -u $cert) | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0) { throw 'Certificate path failed.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Не удалось определить путь сертификата.' }
     & $wsl --distribution $manifest.DistroName --user root --exec /bin/cp /opt/shtab-ai-021/shtab-ai-root.crt $guestPath
-    if ($LASTEXITCODE -ne 0) { throw 'Certificate copy failed.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Не удалось скопировать сертификат.' }
     $imported=Import-Certificate -FilePath $cert -CertStoreLocation Cert:\CurrentUser\Root
     $manifest=Get-Content $ManifestPath -Raw | ConvertFrom-Json
     $old=$manifest.CertificateThumbprint
@@ -61,7 +61,7 @@ while ($true) {
         }
         '5' { Get-Content (Join-Path $manifest.Root 'ollama-error.log') -Tail 60 -ErrorAction SilentlyContinue }
         '6' {
-            if ($manifest.Network -and $manifest.LANAddress) { Write-Host ("LAN: https://$($manifest.LANAddress):$($manifest.HTTPSPort)/login") } else { Write-Host "Сетевой доступ сейчас недоступен; локальный адрес: https://localhost:$($manifest.HTTPSPort)/login" }
+            if ($manifest.Network -and $manifest.LANAddress) { Write-Host ("Адрес в сети: https://$($manifest.LANAddress):$($manifest.HTTPSPort)/login") } else { Write-Host "Сетевой доступ сейчас недоступен; локальный адрес: https://localhost:$($manifest.HTTPSPort)/login" }
             Write-Host ('Публичный сертификат: '+(Join-Path $manifest.Root 'shtab-ai-root.crt'))
             Write-Host 'На другом компьютере Windows добавьте сертификат в доверенные корневые центры сертификации текущего пользователя.'
         }

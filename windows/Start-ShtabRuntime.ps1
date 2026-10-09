@@ -1,12 +1,12 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 #Requires -RunAsAdministrator
 param([Parameter(Mandatory=$true)][string]$ManifestPath)
 $ErrorActionPreference = 'Stop'
 [Net.WebRequest]::DefaultWebProxy = New-Object Net.WebProxy
 $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
-if ($manifest.Product -ne 'ShtabAI' -or $manifest.Backend -ne 'WSL2' -or $manifest.DistroName -notmatch '^ShtabAI-[A-Za-z0-9-]+$') { throw 'Invalid installation manifest.' }
+if ($manifest.Product -ne 'ShtabAI' -or $manifest.Backend -ne 'WSL2' -or $manifest.DistroName -notmatch '^ShtabAI-[A-Za-z0-9-]+$') { throw 'Некорректное описание установки.' }
 $root = Split-Path $ManifestPath
-if ([IO.Path]::GetFullPath($manifest.Root) -ne [IO.Path]::GetFullPath($root)) { throw 'Installation path mismatch.' }
+if ([IO.Path]::GetFullPath($manifest.Root) -ne [IO.Path]::GetFullPath($root)) { throw 'Путь установки не соответствует её описанию.' }
 $wsl = Join-Path $env:SystemRoot 'System32\wsl.exe'
 $ollama = Join-Path $root 'ollama\ollama.exe'
 $keepalive = $null
@@ -18,7 +18,7 @@ $lastForward = '__startup__'
 $previousLAN = [string]$manifest.LANAddress
 function Guest {
     & $wsl --distribution $manifest.DistroName --user root --exec @args
-    if ($LASTEXITCODE -ne 0) { throw 'WSL runtime command failed.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Ошибка выполнения команды WSL.' }
 }
 function Write-State([string]$IP,[string]$Gateway) {
     $json = @{ IP=$IP; Gateway=$Gateway; Endpoint=("http://${Gateway}:11435"); Ready=$true; Acceleration=$lastMode; LANAddress=$manifest.LANAddress; LANUrl=$(if ($manifest.LANAddress) { "https://$($manifest.LANAddress):$($manifest.HTTPSPort)/login" } else { "" }) } | ConvertTo-Json
@@ -59,7 +59,7 @@ function Sync-LAN([string]$IP) {
     if ($listen) {
         Start-Service iphlpsvc
         & netsh.exe interface portproxy add v4tov4 listenaddress=$listen listenport=$port connectaddress=$IP connectport=$port | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'Cannot configure LAN forwarding.' }
+        if ($LASTEXITCODE -ne 0) { throw 'Не удалось настроить доступ из локальной сети.' }
         New-NetFirewallRule -Name $manifest.LANRule -DisplayName ('ShtabAI LAN ' + $manifest.DistroName) -Group 'ShtabAI' -Direction Inbound -Action Allow -Protocol TCP -LocalAddress $listen -LocalPort $port -RemoteAddress LocalSubnet -Profile @('Private','Domain') | Out-Null
     }
     $manifest.LANAddress = $listen
@@ -94,9 +94,9 @@ try {
         }
         $ip = ((Guest /bin/hostname -I | Out-String).Trim() -split '\s+' | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' -and $_ -notlike '127.*' }) | Select-Object -First 1
         $route = (Guest /sbin/ip -4 route show default | Out-String).Trim()
-        if ($route -notmatch '^default via (\d+\.\d+\.\d+\.\d+)') { throw 'WSL NAT gateway not found. This installer requires WSL NAT networking.' }
+        if ($route -notmatch '^default via (\d+\.\d+\.\d+\.\d+)') { throw 'Шлюз WSL NAT не найден. Для этой установки требуется сетевой режим NAT.' }
         $gateway = $Matches[1]
-        if (-not $ip) { throw 'WSL address is unavailable.' }
+        if (-not $ip) { throw 'Адрес WSL недоступен.' }
         $mode = [string]$manifest.Acceleration
         & $wsl --distribution $manifest.DistroName --user root --exec /usr/bin/test -f /opt/shtab-ai-021/native-cpu-fallback.json
         if ($LASTEXITCODE -eq 0) {
@@ -123,10 +123,10 @@ try {
             $server = Start-Process -FilePath $ollama -ArgumentList 'serve' -WorkingDirectory (Split-Path $ollama) -WindowStyle Hidden -RedirectStandardOutput (Join-Path $root 'ollama.log') -RedirectStandardError (Join-Path $root 'ollama-error.log') -PassThru
             $ready = $false
             for ($attempt=0; $attempt -lt 30; $attempt++) {
-                if ($server.HasExited) { throw 'Native Ollama stopped. See ollama-error.log.' }
+                if ($server.HasExited) { throw 'Ollama остановилась. Проверьте ollama-error.log.' }
                 try { $null = Invoke-RestMethod -Uri ("http://${gateway}:11435/api/version") -TimeoutSec 2; $ready=$true; break } catch { Start-Sleep -Seconds 2 }
             }
-            if (-not $ready) { throw 'Native Ollama did not become ready.' }
+            if (-not $ready) { throw 'Ollama не перешла в рабочее состояние.' }
             $lastIP=$ip; $lastGateway=$gateway; $lastMode=$mode
             if ($mode -eq 'cpu') {
                 $freshMode = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
@@ -143,7 +143,7 @@ try {
         }
         Sync-GuestConfig $gateway
         Write-State $ip $gateway
-        if ($keepalive.HasExited) { throw 'WSL keepalive stopped.' }
+        if ($keepalive.HasExited) { throw 'Процесс поддержания работы WSL остановился.' }
       } catch {
         Add-Content -LiteralPath (Join-Path $root 'runtime-error.log') -Value ((Get-Date -Format o) + ' ' + $_.Exception.Message)
       }

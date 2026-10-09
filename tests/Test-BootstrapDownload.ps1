@@ -1,4 +1,4 @@
-$ErrorActionPreference='Stop'
+﻿$ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
 $tokens=$null
 $errors=$null
@@ -29,12 +29,12 @@ try {
     # Missing checksum, corrupt dependency and download failure must all stop bootstrap.
     Set-Content -LiteralPath $sums -Encoding UTF8 -Value $lines[0]
     $failed=$false
-    try { Receive-ShtabBootstrap -BaseUri 'https://fixture.invalid/revision/' -Work (Join-Path $script:fixture 'missing-sum') -Checksums $sums } catch { $failed=$_.Exception.Message -like '*checksum missing*Test-ShtabGPU.ps1*' }
+    try { Receive-ShtabBootstrap -BaseUri 'https://fixture.invalid/revision/' -Work (Join-Path $script:fixture 'missing-sum') -Checksums $sums } catch { $failed=$_.Exception.Message -like '*Контрольная сумма отсутствует*Test-ShtabGPU.ps1*' }
     if (-not $failed) { throw 'Missing helper checksum was accepted.' }
     Set-Content -LiteralPath $sums -Encoding UTF8 -Value $lines
     Add-Content -LiteralPath (Join-Path $script:fixture 'source/windows/Test-ShtabGPU.ps1') -Value '# corrupted download'
     $failed=$false
-    try { Receive-ShtabBootstrap -BaseUri 'https://fixture.invalid/revision/' -Work (Join-Path $script:fixture 'corrupt') -Checksums $sums } catch { $failed=$_.Exception.Message -like '*checksum mismatch*Test-ShtabGPU.ps1*' }
+    try { Receive-ShtabBootstrap -BaseUri 'https://fixture.invalid/revision/' -Work (Join-Path $script:fixture 'corrupt') -Checksums $sums } catch { $failed=$_.Exception.Message -like '*Не совпала контрольная сумма*Test-ShtabGPU.ps1*' }
     if (-not $failed) { throw 'Corrupt helper was accepted.' }
     Remove-Item -LiteralPath (Join-Path $script:fixture 'source/windows/Test-ShtabGPU.ps1')
     $failed=$false

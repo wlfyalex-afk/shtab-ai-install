@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 [CmdletBinding()]
 param(
     [ValidatePattern('^ShtabAI-[A-Za-z0-9-]+$')][string]$DistroName='ShtabAI-021',
@@ -18,56 +18,56 @@ function Receive-ShtabBootstrap {
     foreach ($relative in $required) {
         $pattern='^[a-f0-9]{64}  '+[regex]::Escape($relative)+'$'
         $entry=@($lines | Where-Object { $_ -match $pattern })
-        if ($entry.Count -ne 1) { throw ('Bootstrap checksum missing or duplicated: '+$relative) }
+        if ($entry.Count -ne 1) { throw ('Контрольная сумма отсутствует или повторяется: '+$relative) }
         $expected=($entry[0] -split '  ',2)[0]
         $destination=Join-Path $Work $relative
         New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
-        Write-Host ('Downloading and verifying '+$relative+' (timeout: 60 seconds)...') -ForegroundColor Cyan
+        Write-Host ('Скачиваем и проверяем '+$relative+' (тайм-аут: 60 секунд)...') -ForegroundColor Cyan
         Invoke-WebRequest -UseBasicParsing -Uri ($BaseUri+$relative) -OutFile $destination -TimeoutSec 60
         if ((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
-            throw ('Bootstrap checksum mismatch: '+$relative)
+            throw ('Не совпала контрольная сумма: '+$relative)
         }
     }
     return (Join-Path $Work 'windows/Install-WSL.ps1')
 }
 try {
-    Write-Host 'Shtab.AI installer started.' -ForegroundColor Cyan
+    Write-Host 'Установщик Штаб.AI запущен.' -ForegroundColor Cyan
     $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
     $principal=New-Object Security.Principal.WindowsPrincipal($identity)
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
         $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
         $arguments='-NoProfile -ExecutionPolicy Bypass -File "'+$PSCommandPath+'" -DistroName '+$DistroName+' -Acceleration '+$Acceleration+' -Access '+$Access+' -HTTPSPort '+$HTTPSPort+' -Revision '+$Revision+' -KeepWindowOpen'
         if ($InstallDir) {
-            if ($InstallDir -match '["\r\n]' -or $InstallDir -notmatch '^[A-Za-z]:\\') { throw 'Use an absolute local installation path without quotes or newlines.' }
+            if ($InstallDir -match '["\r\n]' -or $InstallDir -notmatch '^[A-Za-z]:\\') { throw 'Укажите полный путь на локальном диске без кавычек и переносов строки.' }
             $InstallDir=[IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
             $arguments+=' -InstallDir "'+$InstallDir+'"'
         }
-        Write-Host 'Requesting administrator access. Continue in the new installation window.' -ForegroundColor Yellow
+        Write-Host 'Запрашиваем права администратора. Продолжайте в новом окне установки.' -ForegroundColor Yellow
         $process=Start-Process $powershell -Verb RunAs -ArgumentList $arguments -Wait -PassThru
         exit $process.ExitCode
     }
     [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
     if ($Revision -eq 'main') {
-        Write-Host '[1/4] Checking the current release on api.github.com (timeout: 60 seconds)...' -ForegroundColor Cyan
+        Write-Host '[1/4] Проверяем актуальную версию на api.github.com (тайм-аут: 60 секунд)...' -ForegroundColor Cyan
         $Revision=(Invoke-RestMethod -Uri 'https://api.github.com/repos/wlfyalex-afk/shtab-ai-install/commits/main' -Headers @{'User-Agent'='ShtabAI-Installer'} -TimeoutSec 60).sha
     }
-    if ($Revision -notmatch '^[a-f0-9]{40}$') { throw 'Cannot resolve application revision.' }
+    if ($Revision -notmatch '^[a-f0-9]{40}$') { throw 'Не удалось определить версию приложения.' }
     $work=Join-Path $env:TEMP ('shtab-launcher-'+[guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory $work | Out-Null
     try {
         $base="https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/$Revision/"
         $sums=Join-Path $work 'SHA256SUMS'
-        Write-Host '[2/4] Downloading checksums from raw.githubusercontent.com (timeout: 60 seconds)...' -ForegroundColor Cyan
+        Write-Host '[2/4] Скачиваем контрольные суммы с raw.githubusercontent.com (тайм-аут: 60 секунд)...' -ForegroundColor Cyan
         Invoke-WebRequest -UseBasicParsing -Uri ($base+'SHA256SUMS') -OutFile $sums -TimeoutSec 60
-        Write-Host '[3/4] Downloading the Windows installer and required helper scripts...' -ForegroundColor Cyan
+        Write-Host '[3/4] Скачиваем установщик Windows и необходимые служебные скрипты...' -ForegroundColor Cyan
         $installer=Receive-ShtabBootstrap -BaseUri $base -Work $work -Checksums $sums
-        Write-Host '[4/4] Bootstrap files verified. Checking Windows and preparing WSL...' -ForegroundColor Cyan
+        Write-Host '[4/4] Файлы проверены. Проверяем Windows и подготавливаем WSL...' -ForegroundColor Cyan
         & $installer -DistroName $DistroName -Acceleration $Acceleration -Access $Access -HTTPSPort $HTTPSPort -Revision $Revision -InstallDir $InstallDir
     } finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
-    if ($KeepWindowOpen) { [void](Read-Host 'Press Enter to close this installation window') }
+    if ($KeepWindowOpen) { [void](Read-Host 'Нажмите Enter, чтобы закрыть окно установки') }
 } catch {
-    Write-Host ('Installation stopped: '+$_.Exception.Message) -ForegroundColor Red
+    Write-Host ('Установка остановлена: '+$_.Exception.Message) -ForegroundColor Red
     if ($_.InvocationInfo.PositionMessage) { Write-Host $_.InvocationInfo.PositionMessage -ForegroundColor Yellow }
-    if ($KeepWindowOpen) { [void](Read-Host 'Installation stopped. Copy the error above; press Enter to close') }
+    if ($KeepWindowOpen) { [void](Read-Host 'Установка остановлена. Скопируйте ошибку выше; нажмите Enter, чтобы закрыть окно') }
     exit 1
 }

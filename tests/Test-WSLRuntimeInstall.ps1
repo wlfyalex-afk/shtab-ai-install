@@ -1,4 +1,4 @@
-$ErrorActionPreference='Stop'
+﻿$ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
 $savedTemp=$env:TEMP
 $savedSystemRoot=$env:SystemRoot
@@ -41,10 +41,10 @@ try {
             if (-not $script:started) { throw 'MSI was not started.' }
         }
         $script:signatureStatus='NotTrusted'; $script:started=$false; $failed=$false
-        try { Install-ShtabWSLRuntime } catch { $failed=$_.Exception.Message -like '*signature verification failed*' }
+        try { Install-ShtabWSLRuntime } catch { $failed=$_.Exception.Message -like '*Не удалось проверить подпись*' }
         if (-not $failed -or $script:started) { throw 'Untrusted MSI was executed.' }
         $script:signatureStatus='Valid'; $script:exitCode=1603; $failed=$false
-        try { Install-ShtabWSLRuntime } catch { $failed=$_.Exception.Message -like '*code 1603*MSI log*' }
+        try { Install-ShtabWSLRuntime } catch { $failed=$_.Exception.Message -like '*код 1603*Журнал MSI*' }
         if (-not $failed) { throw 'MSI installation failure was accepted.' }
     }
     Write-Host 'Legacy WSL MSI installation tests passed.'

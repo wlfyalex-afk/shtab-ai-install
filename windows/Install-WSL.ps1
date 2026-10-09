@@ -14,7 +14,7 @@ $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 function Invoke-WSL {
     & $script:wsl @args
-    if ($LASTEXITCODE -ne 0) { throw "WSL command failed (code $LASTEXITCODE). Installation data preserved." }
+    if ($LASTEXITCODE -ne 0) { throw "Команда WSL завершилась с ошибкой (код $LASTEXITCODE). Данные установки сохранены." }
 }
 function Invoke-Guest {
     $guestArguments = @($args)
@@ -48,13 +48,13 @@ function Test-WSLInstalled {
 function Install-ShtabWSLRuntime {
     # The Windows inbox WSL can lack --no-distribution and --version.
     # Install Microsoft's signed modern runtime without a default distro.
-    Write-Host 'Downloading official Microsoft WSL runtime (MSI, no Linux distribution)...' -ForegroundColor Cyan
+    Write-Host 'Скачиваем официальный пакет WSL от Microsoft (MSI, без дистрибутива Linux)...' -ForegroundColor Cyan
     $release=Invoke-RestMethod -Uri 'https://api.github.com/repos/microsoft/WSL/releases/latest' -Headers @{'User-Agent'='ShtabAI-Installer'} -TimeoutSec 60
-    if ($release.prerelease -or $release.draft) { throw 'Stable Microsoft WSL release is unavailable.' }
+    if ($release.prerelease -or $release.draft) { throw 'Стабильная версия Microsoft WSL недоступна.' }
     $assets=@($release.assets | Where-Object { $_.name -match '^wsl\.[0-9.]+\.x64\.msi$' })
-    if ($assets.Count -ne 1) { throw 'Official WSL x64 MSI asset is unavailable.' }
+    if ($assets.Count -ne 1) { throw 'Официальный установочный пакет WSL x64 MSI недоступен.' }
     $uri=[string]$assets[0].browser_download_url
-    if ($uri -notmatch '^https://github\.com/microsoft/WSL/releases/download/[^/]+/wsl\.[0-9.]+\.x64\.msi$') { throw 'Unexpected WSL download source.' }
+    if ($uri -notmatch '^https://github\.com/microsoft/WSL/releases/download/[^/]+/wsl\.[0-9.]+\.x64\.msi$') { throw 'Неожиданный адрес скачивания WSL.' }
     $directory=Join-Path $env:TEMP ('shtab-wsl-runtime-'+[guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $directory | Out-Null
     $package=Join-Path $directory 'wsl.x64.msi'
@@ -63,14 +63,14 @@ function Install-ShtabWSLRuntime {
         Invoke-WebRequest -UseBasicParsing -Uri $uri -OutFile $package -TimeoutSec 600
         $signature=Get-AuthenticodeSignature -LiteralPath $package
         if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(^|,\s*)O=Microsoft Corporation(,|$)') {
-            throw 'Microsoft WSL MSI signature verification failed.'
+            throw 'Не удалось проверить подпись Microsoft у пакета WSL MSI.'
         }
-        Write-Host 'Microsoft signature verified. Installing WSL runtime; this may take several minutes...' -ForegroundColor Cyan
+        Write-Host 'Подпись Microsoft проверена. Устанавливаем WSL; это может занять несколько минут...' -ForegroundColor Cyan
         $msiexec=Join-Path $env:SystemRoot 'System32\msiexec.exe'
         if (-not [Environment]::Is64BitProcess) { $msiexec=Join-Path $env:SystemRoot 'Sysnative\msiexec.exe' }
         $process=Start-Process -FilePath $msiexec -ArgumentList ('/i "'+$package+'" /qn /norestart /L*v "'+$log+'"') -Wait -PassThru
-        if ($process.ExitCode -notin @(0,3010)) { throw ("Microsoft WSL installation failed (code $($process.ExitCode)). MSI log: $log") }
-        Write-Host ("WSL runtime installation completed. MSI log: $log") -ForegroundColor Green
+        if ($process.ExitCode -notin @(0,3010)) { throw ("Установка Microsoft WSL завершилась с ошибкой (код $($process.ExitCode)). Журнал MSI: $log") }
+        Write-Host ("Установка WSL завершена. Журнал MSI: $log") -ForegroundColor Green
     } finally {
         Remove-Item -LiteralPath $directory -Recurse -Force -ErrorAction SilentlyContinue
     }
@@ -84,86 +84,86 @@ function Write-UTF8([string]$Path,[string]$Value) {
 }
 function Read-Distros {
     $result = & $script:wsl --list --quiet
-    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect existing WSL distributions.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Не удалось получить список дистрибутивов WSL.' }
     return @($result | ForEach-Object { ($_ -replace "`0",'').Trim() } | Where-Object { $_ })
 }
 function Verify-Package([string]$Root) {
     foreach ($line in Get-Content -LiteralPath (Join-Path $Root 'SHA256SUMS') -Encoding UTF8) {
-        if ($line -notmatch '^([a-f0-9]{64})  (.+)$') { throw 'Invalid checksum manifest.' }
+        if ($line -notmatch '^([a-f0-9]{64})  (.+)$') { throw 'Некорректный список контрольных сумм.' }
         $expected = $Matches[1]; $relative = $Matches[2]
-        if ($relative -match '(^/|(^|/)\.\.(/|$)|\\|:)') { throw 'Unsafe package path.' }
+        if ($relative -match '(^/|(^|/)\.\.(/|$)|\\|:)') { throw 'Недопустимый путь файла в установочном комплекте.' }
         $actual = (Get-FileHash -LiteralPath (Join-Path $Root $relative) -Algorithm SHA256).Hash.ToLowerInvariant()
-        if ($actual -ne $expected) { throw "Checksum mismatch: $relative" }
+        if ($actual -ne $expected) { throw "Не совпала контрольная сумма: $relative" }
     }
 }
-Write-Host 'Checking Windows edition, RAM and CPU...' -ForegroundColor Cyan
+Write-Host 'Проверяем версию Windows, оперативную память и процессор...' -ForegroundColor Cyan
 $os = Get-CimInstance Win32_OperatingSystem
-if (-not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { throw 'Windows x64 is required.' }
-if ($os.ProductType -eq 1 -and [int]$os.BuildNumber -lt 19045) { throw 'Requires Windows 10 22H2 or Windows 11 (Home/Pro/Enterprise/Education).' }
-if ($os.ProductType -ne 1) { throw 'This edition supports Windows 10/11 Home/Pro; Windows Server is excluded.' }
-if ((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory -lt 11811160064) { throw 'At least 12 GB host RAM is required; 16-24 GB or more is recommended.' }
-if ([Environment]::ProcessorCount -lt 4) { throw 'At least 4 logical CPU cores are required.' }
+if (-not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { throw 'Требуется 64-разрядная Windows x64.' }
+if ($os.ProductType -eq 1 -and [int]$os.BuildNumber -lt 19045) { throw 'Требуется Windows 10 22H2 или Windows 11 (Home/Pro/Enterprise/Education).' }
+if ($os.ProductType -ne 1) { throw 'Поддерживается Windows 10/11 Home/Pro. Windows Server не поддерживается этим установщиком.' }
+if ((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory -lt 11811160064) { throw 'Требуется не менее 12 ГБ оперативной памяти; рекомендуется 16–24 ГБ и более.' }
+if ([Environment]::ProcessorCount -lt 4) { throw 'Требуется не менее 4 логических ядер процессора.' }
 $script:wsl = Join-Path $env:SystemRoot 'System32\wsl.exe'
 if (-not [Environment]::Is64BitProcess) { $script:wsl = Join-Path $env:SystemRoot 'Sysnative\wsl.exe' }
 $restart = $false
 foreach ($name in @('Microsoft-Windows-Subsystem-Linux','VirtualMachinePlatform')) {
-    Write-Host ("Checking Windows component: $name (this may take several minutes)...") -ForegroundColor Cyan
+    Write-Host ("Проверяем компонент Windows: $name (это может занять несколько минут)...") -ForegroundColor Cyan
     $feature = Get-WindowsOptionalFeature -Online -FeatureName $name
     if ($feature.State -ne 'Enabled') {
         $result = Enable-WindowsOptionalFeature -Online -FeatureName $name -All -NoRestart
         $restart = $restart -or $result.RestartNeeded
     }
 }
-if ($restart) { Write-Host 'WSL components enabled. Restart Windows and repeat the same installation command.' -ForegroundColor Yellow; return }
-if (-not (Test-Path $script:wsl)) { throw 'WSL executable is unavailable. Restart Windows and repeat installation.' }
-Write-Host 'Checking WSL runtime...' -ForegroundColor Cyan
+if ($restart) { Write-Host 'Компоненты WSL включены. Перезагрузите Windows и снова запустите этот установщик.' -ForegroundColor Yellow; return }
+if (-not (Test-Path $script:wsl)) { throw 'Программа WSL недоступна. Перезагрузите Windows и повторите установку.' }
+Write-Host 'Проверяем WSL...' -ForegroundColor Cyan
 if (-not (Test-WSLInstalled)) {
-    Write-Host 'Installing WSL runtime (no default Linux distribution)...' -ForegroundColor Cyan
+    Write-Host 'Устанавливаем WSL без стандартного дистрибутива Linux...' -ForegroundColor Cyan
     Install-ShtabWSLRuntime
-    Write-Host 'WSL installed. Restart Windows and repeat installation.' -ForegroundColor Yellow
+    Write-Host 'WSL установлена. Перезагрузите Windows и снова запустите установщик.' -ForegroundColor Yellow
     return
 }
-Write-Host 'Updating WSL runtime...' -ForegroundColor Cyan
+Write-Host 'Обновляем WSL...' -ForegroundColor Cyan
 Invoke-WSL --update --web-download
-if ($DistroName -in @(Read-Distros)) { throw "Distribution $DistroName already exists. Use the uninstaller before a clean installation." }
-if (Get-NetTCPConnection -LocalPort $HTTPSPort -State Listen -ErrorAction SilentlyContinue) { throw "Windows port $HTTPSPort is occupied." }
-if (Get-NetTCPConnection -LocalPort 18093 -State Listen -ErrorAction SilentlyContinue) { throw 'Windows port 18093 is occupied.' }
-if (Get-NetTCPConnection -LocalPort 11435 -State Listen -ErrorAction SilentlyContinue) { throw 'Windows port 11435 is occupied; native Ollama needs its own port.' }
+if ($DistroName -in @(Read-Distros)) { throw "Дистрибутив $DistroName уже существует. Перед новой установкой воспользуйтесь удалением." }
+if (Get-NetTCPConnection -LocalPort $HTTPSPort -State Listen -ErrorAction SilentlyContinue) { throw "Порт Windows $HTTPSPort занят." }
+if (Get-NetTCPConnection -LocalPort 18093 -State Listen -ErrorAction SilentlyContinue) { throw 'Порт Windows 18093 занят.' }
+if (Get-NetTCPConnection -LocalPort 11435 -State Listen -ErrorAction SilentlyContinue) { throw 'Порт Windows 11435 занят; для Ollama нужен отдельный свободный порт.' }
 $defaultRoot = Join-Path $env:LOCALAPPDATA ('ShtabAI\' + $DistroName)
 if (-not $InstallDir) {
     Get-Volume | Where-Object DriveLetter | Select-Object -Property @('DriveLetter','FileSystem','SizeRemaining') | Format-Table -AutoSize | Out-Host
-    $InstallDir = Read-Host ("Installation folder (for example D:\Apps\$DistroName) [$defaultRoot]")
+    $InstallDir = Read-Host ("Папка установки (например D:\Apps\$DistroName) [$defaultRoot]")
     if (-not $InstallDir) { $InstallDir=$defaultRoot }
 }
-if ($InstallDir -notmatch '^[A-Za-z]:\\' -or $InstallDir -match '["\r\n]') { throw 'Choose an absolute local drive path.' }
+if ($InstallDir -notmatch '^[A-Za-z]:\\' -or $InstallDir -match '["\r\n]') { throw 'Укажите полный путь на локальном диске.' }
 $root = [IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
 $driveLetter = [IO.Path]::GetPathRoot($root).Substring(0,1)
 $volume = Get-Volume -DriveLetter $driveLetter -ErrorAction Stop
-if ($volume.FileSystem -ne 'NTFS' -or $volume.DriveType -ne 'Fixed') { throw 'Choose a local fixed NTFS drive for WSL and models.' }
-if ($root.Length -lt 4) { throw 'Choose a new application folder, not a drive root.' }
+if ($volume.FileSystem -ne 'NTFS' -or $volume.DriveType -ne 'Fixed') { throw 'Для WSL и моделей выберите локальный диск с файловой системой NTFS.' }
+if ($root.Length -lt 4) { throw 'Выберите новую папку приложения, а не корень диска.' }
 $ancestor=Split-Path $root
 while ($ancestor -and -not (Test-Path $ancestor)) { $ancestor=Split-Path $ancestor }
-if (-not $ancestor) { throw 'Installation parent is unavailable.' }
+if (-not $ancestor) { throw 'Родительская папка установки недоступна.' }
 $checkAncestor=$ancestor
 while ($checkAncestor) {
-    if ((Get-Item $checkAncestor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Installation path must not contain junctions or links.' }
+    if ((Get-Item $checkAncestor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Путь установки не должен содержать ссылки или точки соединения.' }
     $checkAncestor=Split-Path $checkAncestor
 }
 $indexPath=Join-Path (Join-Path $env:LOCALAPPDATA 'ShtabAI') ($DistroName+'.json')
-if (Test-Path $indexPath) { throw 'An installation registration already exists; use the uninstaller first.' }
-if ((Get-PSDrive -Name ([IO.Path]::GetPathRoot($root).Substring(0,1))).Free -lt 42949672960) { throw 'At least 40 GiB free on the installation drive is required.' }
-if (Test-Path $root) { throw "Installation directory already exists: $root. Use the uninstaller first." }
+if (Test-Path $indexPath) { throw 'Установка уже зарегистрирована; сначала воспользуйтесь удалением.' }
+if ((Get-PSDrive -Name ([IO.Path]::GetPathRoot($root).Substring(0,1))).Free -lt 42949672960) { throw 'На диске установки требуется не менее 40 ГиБ свободного места.' }
+if (Test-Path $root) { throw "Папка установки уже существует: $root. Сначала воспользуйтесь удалением." }
 $desktop = [Environment]::GetFolderPath('Desktop')
 $shortcut = Join-Path $desktop ($DistroName + '.url')
-if (Test-Path $shortcut) { throw 'The desktop shortcut already exists; remove the previous installation first.' }
+if (Test-Path $shortcut) { throw 'Ярлык на рабочем столе уже существует; сначала удалите предыдущую установку.' }
 $wslConfig = Join-Path $env:USERPROFILE '.wslconfig'
 if ((Test-Path $wslConfig) -and (Get-Content $wslConfig -Raw) -match '(?im)^\s*localhostForwarding\s*=\s*false\s*$') {
-    throw 'WSL localhostForwarding is disabled in .wslconfig. Enable it before installation.'
+    throw 'В .wslconfig отключён localhostForwarding. Включите его перед установкой.'
 }
 if ((Test-Path $wslConfig) -and (Get-Content $wslConfig -Raw) -match '(?im)^\s*networkingMode\s*=\s*(mirrored|virtioproxy|none)\s*$') {
-    throw 'This release requires WSL NAT mode. Existing .wslconfig is preserved; select NAT before installing.'
+    throw 'Требуется сетевой режим WSL NAT. Существующий .wslconfig сохранён; выберите NAT перед установкой.'
 }
-Write-Host 'Detected Windows display adapters:'
+Write-Host 'Обнаруженные видеокарты Windows:'
 Get-CimInstance Win32_VideoController | Select-Object -Property @('Name','DriverVersion') | Format-Table -AutoSize | Out-Host
 if ($Acceleration -eq 'ask') {
     $choice = Read-Host 'Ускорение: 1 — автоматическая проверка; 2 — процессор [1]'
@@ -177,20 +177,20 @@ Write-Host 'При блокировке Kaspersky вручную приоста�
 $gpuDecision=Get-ShtabAcceleration $Acceleration
 $Acceleration=$gpuDecision.Mode
 if ($Access -eq 'ask') {
-    $answer = Read-Host 'Access: 1 - this PC only; 2 - local network [2]'
-    if ($answer -in @('','2')) { $Access='lan' } elseif ($answer -eq '1') { $Access='local' } else { throw 'Invalid access selection.' }
+    $answer = Read-Host 'Доступ: 1 — только этот компьютер; 2 — локальная сеть [2]'
+    if ($answer -in @('','2')) { $Access='lan' } elseif ($answer -eq '1') { $Access='local' } else { throw 'Некорректный выбор режима доступа.' }
 }
 $lanAddress = ''
 if ($Access -eq 'lan') {
     $adapters = @(Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -and $_.NetAdapter.Status -eq 'Up' -and $_.IPv4Address } | ForEach-Object {
         [pscustomobject]@{Interface=$_.InterfaceAlias; IP=$_.IPv4Address[0].IPAddress; Index=$_.InterfaceIndex; Guid=[string]$_.NetAdapter.InterfaceGuid}
     })
-    if (-not $adapters.Count) { throw 'No active LAN interface with an IPv4 gateway. Select local access.' }
+    if (-not $adapters.Count) { throw 'Не найден активный сетевой адаптер со шлюзом IPv4. Выберите локальный доступ.' }
     for ($i=0; $i -lt $adapters.Count; $i++) { Write-Host "$($i+1) - $($adapters[$i].Interface) / $($adapters[$i].IP)" }
-    $selected = Read-Host 'Select LAN interface [1]'
+    $selected = Read-Host 'Выберите сетевой адаптер [1]'
     if (-not $selected) { $selected='1' }
     $number=0
-    if (-not [int]::TryParse($selected,[ref]$number) -or $number -lt 1 -or $number -gt $adapters.Count) { throw 'Invalid LAN interface.' }
+    if (-not [int]::TryParse($selected,[ref]$number) -or $number -lt 1 -or $number -gt $adapters.Count) { throw 'Некорректный выбор сетевого адаптера.' }
     $lanAddress=$adapters[$number-1].IP
     $profile = Get-NetConnectionProfile -InterfaceIndex $adapters[$number-1].Index -ErrorAction SilentlyContinue
     if (-not $profile) { throw 'Не удалось определить профиль сети. Проверьте подключение.' }
@@ -207,23 +207,23 @@ if ($Revision -eq 'main') {
     $head = Invoke-RestMethod -Uri 'https://api.github.com/repos/wlfyalex-afk/shtab-ai-install/commits/main' -Headers @{ 'User-Agent'='ShtabAI-Installer' }
     $Revision = $head.sha
 }
-if ($Revision -notmatch '^[a-f0-9]{40}$') { throw 'Cannot resolve a fixed application revision.' }
+if ($Revision -notmatch '^[a-f0-9]{40}$') { throw 'Не удалось определить фиксированную версию приложения.' }
 $work = Join-Path $ancestor ('shtab-wsl-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory $work | Out-Null
 try {
     $archive = Join-Path $work 'source.zip'
-    Write-Host "Downloading Shtab.AI revision $Revision"
+    Write-Host "Скачиваем Штаб.AI, версия $Revision"
     Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/wlfyalex-afk/shtab-ai-install/archive/$Revision.zip" -OutFile $archive
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $zip = [IO.Compression.ZipFile]::OpenRead($archive)
     try {
         foreach ($entry in $zip.Entries) {
-            if ($entry.FullName -match '(^/|(^|/)\.\.(/|$)|\\|:)') { throw 'Unsafe archive path.' }
+            if ($entry.FullName -match '(^/|(^|/)\.\.(/|$)|\\|:)') { throw 'Недопустимый путь файла в архиве.' }
         }
     } finally { $zip.Dispose() }
     Expand-Archive -LiteralPath $archive -DestinationPath (Join-Path $work 'source')
     $roots = @(Get-ChildItem (Join-Path $work 'source') -Directory)
-    if ($roots.Count -ne 1) { throw 'Unexpected source archive layout.' }
+    if ($roots.Count -ne 1) { throw 'Некорректная структура архива приложения.' }
     $package = $roots[0].FullName
     Verify-Package $package
     $image = Join-Path $work 'ubuntu.wsl'
@@ -233,10 +233,10 @@ try {
     Invoke-WebRequest -UseBasicParsing -Uri ($imageBase + 'SHA256SUMS') -OutFile $sums
     $text = [IO.File]::ReadAllText($sums,[Text.Encoding]::UTF8)
     $matches = [regex]::Matches($text,('(?im)^([a-f0-9]{64})[ \t]+\*?' + [regex]::Escape($imageName) + '[ \t]*\r?$'))
-    if ($matches.Count -ne 1) { throw 'Ubuntu WSL image checksum is unavailable.' }
-    Write-Host 'Downloading Ubuntu 24.04 WSL image...'
+    if ($matches.Count -ne 1) { throw 'Контрольная сумма образа Ubuntu WSL недоступна.' }
+    Write-Host 'Скачиваем образ Ubuntu 24.04 для WSL...'
     Invoke-WebRequest -UseBasicParsing -Uri ($imageBase + $imageName) -OutFile $image
-    if ((Get-FileHash $image -Algorithm SHA256).Hash.ToLowerInvariant() -ne $matches[0].Groups[1].Value.ToLowerInvariant()) { throw 'Ubuntu image checksum mismatch.' }
+    if ((Get-FileHash $image -Algorithm SHA256).Hash.ToLowerInvariant() -ne $matches[0].Groups[1].Value.ToLowerInvariant()) { throw 'Не совпала контрольная сумма образа Ubuntu.' }
     New-Item -ItemType Directory $root -Force | Out-Null
     $manifest = [ordered]@{ Product='ShtabAI'; Backend='WSL2'; DistroName=$DistroName; Root=$root; Revision=$Revision; HTTPSPort=$HTTPSPort; Shortcut=$shortcut; TaskName=('ShtabAI-' + $DistroName + '-Start'); CertificateThumbprint=''; WSLConfigCreated=$false; WSLConfigText=''; Acceleration=$Acceleration; Network=($Access -eq 'lan'); LANAddress=$lanAddress; LANInterfaceGuid=$(if ($Access -eq 'lan') { $adapters[$number-1].Guid } else { '' }); LANRule=('ShtabAI-' + $DistroName + '-LAN') }
     $manifestPath = Join-Path $root 'installation.json'
@@ -255,13 +255,13 @@ try {
         Write-UTF8 $wslConfig $manifest.WSLConfigText
         $manifest.WSLConfigCreated = $true
         Write-UTF8 $manifestPath ($manifest | ConvertTo-Json)
-        Write-Host "Created WSL resource limit: $memoryGB GB RAM, $cores CPU. Existing WSL distributions are not stopped."
+        Write-Host "Лимит WSL: $memoryGB ГБ оперативной памяти, ядер процессора: $cores. Другие дистрибутивы WSL не останавливаются."
     }
     Invoke-WSL --import $DistroName (Join-Path $root 'distro') $image --version 2
     $configPath = "\\wsl.localhost\$DistroName\etc\wsl.conf"
     $configText = "[boot]`nsystemd=true`n"
     [IO.File]::WriteAllText($configPath,$configText,(New-Object Text.UTF8Encoding($false)))
-    if ([IO.File]::ReadAllText($configPath) -cne $configText) { throw 'WSL configuration verification failed.' }
+    if ([IO.File]::ReadAllText($configPath) -cne $configText) { throw 'Не удалось проверить настройки WSL.' }
     Invoke-WSL --terminate $DistroName
     $deadline = (Get-Date).AddMinutes(2)
     do {
@@ -269,7 +269,7 @@ try {
         if ($pidOne -eq 'systemd') { break }
         Start-Sleep -Seconds 3
     } while ((Get-Date) -lt $deadline)
-    if ($pidOne -ne 'systemd') { throw 'WSL systemd did not start. Update WSL, then remove this test installation and retry.' }
+    if ($pidOne -ne 'systemd') { throw 'Служба systemd в WSL не запустилась. Обновите WSL, затем удалите эту тестовую установку и повторите запуск.' }
     if ($Acceleration -eq 'nvidia') {
         & $script:wsl --distribution $DistroName --user root --exec /usr/lib/wsl/lib/nvidia-smi -L
         if ($LASTEXITCODE -ne 0) {
@@ -278,16 +278,16 @@ try {
             Write-UTF8 $manifestPath ($manifest | ConvertTo-Json)
         }
     }
-    Write-Host 'Downloading native Ollama for Windows (including GPU libraries)...'
+    Write-Host 'Скачиваем Ollama для Windows (включая библиотеки видеокарт)...'
     $ollamaZip = Join-Path $work 'ollama.zip'
     Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-windows-amd64.zip' -OutFile $ollamaZip
-    if ((Get-FileHash $ollamaZip -Algorithm SHA256).Hash.ToLowerInvariant() -ne '428c94622a04764b318ddf13a061898edf69e32ffa896f638ed6015fd3f33288') { throw 'Native Ollama checksum mismatch.' }
+    if ((Get-FileHash $ollamaZip -Algorithm SHA256).Hash.ToLowerInvariant() -ne '428c94622a04764b318ddf13a061898edf69e32ffa896f638ed6015fd3f33288') { throw 'Не совпала контрольная сумма Ollama.' }
     $ollamaDir = Join-Path $root 'ollama'
     Expand-Archive -LiteralPath $ollamaZip -DestinationPath $ollamaDir
     if ($Acceleration -eq 'amd') {
         $rocmZip = Join-Path $work 'ollama-rocm.zip'
         Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-windows-amd64-rocm.zip' -OutFile $rocmZip
-        if ((Get-FileHash $rocmZip -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'a290510b3ee3b743de54eb3fbae99b69f19a49485f42ce6bcf4a1a6f86e4ba01') { throw 'AMD library checksum mismatch.' }
+        if ((Get-FileHash $rocmZip -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'a290510b3ee3b743de54eb3fbae99b69f19a49485f42ce6bcf4a1a6f86e4ba01') { throw 'Не совпала контрольная сумма библиотек AMD.' }
         Expand-Archive -LiteralPath $rocmZip -DestinationPath $ollamaDir -Force
     }
     Copy-Item -LiteralPath (Join-Path $package 'windows\Start-ShtabRuntime.ps1') -Destination $root
@@ -307,7 +307,7 @@ try {
     $deadline=(Get-Date).AddMinutes(3)
     $stateFile=Join-Path $root 'runtime-state.json'
     while (-not (Test-Path $stateFile)) {
-        if ((Get-Date) -gt $deadline) { throw 'Native Ollama startup timed out. Check the task and ollama-error.log.' }
+        if ((Get-Date) -gt $deadline) { throw 'Истекло время запуска Ollama. Проверьте задачу автозапуска и ollama-error.log.' }
         Start-Sleep -Seconds 3
     }
     $runtimeState=Get-Content $stateFile -Raw | ConvertFrom-Json
@@ -335,7 +335,7 @@ try {
         if ($status -eq 'READY_FOR_ADMIN') { break }
         if ($status -like 'FAILED*' -or (Get-Date) -gt $deadline) {
             Invoke-Guest /bin/journalctl -u shtab-ai-install -n 80 --no-pager
-            throw "Installation did not complete: $status. Use the uninstaller for a clean retry."
+            throw "Установка не завершена: $status. Для новой попытки воспользуйтесь удалением."
         }
         Start-Sleep -Seconds 10
     } while ($true)
@@ -346,7 +346,7 @@ try {
     $imported = Import-Certificate -FilePath $cert -CertStoreLocation Cert:\CurrentUser\Root
     $manifest.CertificateThumbprint = $imported.Thumbprint
     Write-UTF8 $manifestPath ($manifest | ConvertTo-Json)
-    Write-Host 'Create the first administrator (password is entered privately):'
+    Write-Host 'Создайте первого администратора (пароль не отображается при вводе):'
     Invoke-Guest /opt/shtab-ai-021/shtabctl bootstrap
     $url = "https://localhost:$HTTPSPort/login"
     Write-UTF8 $shortcut ("[InternetShortcut]`nURL=$url`n")
@@ -359,16 +359,16 @@ try {
     $managerLink.Save()
     # Check the Windows-to-WSL path with normal certificate validation.
     $response = Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 15
-    if ($response.StatusCode -ne 200) { throw 'The Windows login page check failed.' }
-    Write-Host "Shtab.AI ready: $url | acceleration: $Acceleration" -ForegroundColor Green
+    if ($response.StatusCode -ne 200) { throw 'Проверка страницы входа из Windows не пройдена.' }
+    Write-Host "Штаб.AI готова: $url | режим ускорения: $Acceleration" -ForegroundColor Green
     $currentManifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
     $lanAddress = [string]$currentManifest.LANAddress
     if ($manifest.Network -and $lanAddress) {
         $networkURL = "https://${lanAddress}:$HTTPSPort/login"
         $networkResponse = Invoke-WebRequest -UseBasicParsing -Uri $networkURL -TimeoutSec 15
-        if ($networkResponse.StatusCode -ne 200) { throw 'LAN address check failed.' }
-        Write-Host "LAN: $networkURL. On other PCs trust the public certificate: $cert"
-        Write-Host 'A remote PC login/upload test is still required; this local test cannot prove a remote firewall or browser configuration.'
+        if ($networkResponse.StatusCode -ne 200) { throw 'Проверка адреса в локальной сети не пройдена.' }
+        Write-Host "Адрес в сети: $networkURL. На других компьютерах добавьте сертификат в доверенные: $cert"
+        Write-Host 'Проверьте вход и загрузку записи с другого компьютера: локальная проверка не проверяет его браузер и брандмауэр.'
     }
     Start-Process $url
 } finally {

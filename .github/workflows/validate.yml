@@ -60,7 +60,7 @@ jobs:
       - name: Parse Windows menu commands
         shell: powershell
         run: |
-          $commands = @(Get-Content Start-ShtabAI-Windows.cmd | Where-Object { $_ -match '^powershell.exe .* -Command "(.+)"$' } | ForEach-Object { [regex]::Match($_, '-Command "(.+)"$').Groups[1].Value })
+          $commands = @(Get-Content Start-ShtabAI-Windows.cmd -Encoding UTF8 | Where-Object { $_ -match '^powershell.exe .* -Command "(.+)"$' } | ForEach-Object { [regex]::Match($_, '-Command "(.+)"$').Groups[1].Value })
           if ($commands.Count -ne 2) { throw 'Expected install and uninstall commands.' }
           foreach ($command in $commands) {
             $tokens = $null
