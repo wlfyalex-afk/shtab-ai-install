@@ -30,7 +30,7 @@ certificate)
 diagnose) bash scripts/diagnose.sh ;;
 support) python3 scripts/support-report.py ;;
 logs) journalctl -u shtab-ai-install -n 100 --no-pager ;;
-resume) systemctl reset-failed shtab-ai-install; systemctl start --no-block shtab-ai-install ;;
+resume) bash scripts/resume-install.sh ;;
 bootstrap)
     [[ $(cat /var/lib/shtab-ai-021/status) == READY_FOR_ADMIN ]] || { echo 'Wait for READY_FOR_ADMIN'; exit 1; }
     dc exec web python bootstrap021.py

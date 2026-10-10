@@ -11,10 +11,16 @@ case "$access" in ask|local|lan) ;; *) echo 'Access: ask/local/lan'; exit 2;; es
 [[ $revision == main || $revision =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid revision'; exit 2; }
 source /etc/os-release
 [[ $ID == ubuntu && $VERSION_ID == 24.04 && $(uname -m) == x86_64 ]] || { echo 'Поддерживается Ubuntu 24.04 LTS x64.'; exit 1; }
-[[ ! -e /opt/shtab-ai-021 ]] || { echo 'Каталог прежней установки существует. Сначала запустите скрипт удаления.'; exit 1; }
+resuming=false
+if [[ -e /opt/shtab-ai-021 ]]; then
+    resuming=true
+    [[ -f /opt/shtab-ai-021/installation-created && -f /opt/shtab-ai-021/.env ]] || { echo 'Неполная конфигурация прежней установки. Данные сохранены.'; exit 1; }
+    echo 'Найдена установка Штаб.AI. Продолжаем без удаления.'
+fi
 umask 077
 work=$(mktemp -d /var/tmp/shtab-bootstrap.XXXXXX)
 trap 'rm -rf "$work"' EXIT
+if ! $resuming; then
 if [[ -z $install_dir ]]; then
     lsblk -o NAME,FSTYPE,SIZE,MOUNTPOINTS
     read -r -p 'Новая папка установки [/opt/shtab-ai-021], например /mnt/data/shtab-ai-021: ' install_dir
@@ -79,6 +85,52 @@ cd "${roots[0]}"
 sha256sum --quiet -c SHA256SUMS
 python3 scripts/configure-storage.py prepare "$install_dir"
 SHTAB_ACCESS="$access" SHTAB_LAN_ADDRESS="$host" SHTAB_LAN_SUBNET="$subnet" bash install.sh "$host" "$mode"
+else
+    # Use the current bootstrap's resume helper even for an older installation.
+    (
+#!/bin/bash
+# Continue the installed version with its original secrets, volumes and cache.
+set -euo pipefail
+[[ $EUID -eq 0 ]] || { echo 'Запустите с sudo.'; exit 1; }
+cd /opt/shtab-ai-021
+for file in installation-created .env compose.yaml secrets/db_password secrets/flask_secret scripts/provision.sh; do
+    [[ -f $file ]] || { echo "Неполная конфигурация установки: $file. Данные сохранены."; exit 1; }
+done
+if [[ -f storage.json ]]; then python3 scripts/configure-storage.py verify; fi
+unit=shtab-ai-install.service
+systemctl cat "$unit" >/dev/null
+active=$(systemctl show "$unit" -p ActiveState --value)
+if [[ $active == activating || $active == active ]]; then
+    echo 'Установка уже идёт; подключаемся к её прогрессу.'
+    exit 0
+fi
+status=$(cat /var/lib/shtab-ai-021/status 2>/dev/null || true)
+if [[ $status == READY_FOR_ADMIN ]]; then
+    echo 'Компоненты установлены; завершаем настройку.'
+    exit 0
+fi
+if [[ -n ${1:-} ]]; then
+    # WSL's NAT gateway may have changed after a reboot. Do this only while idle.
+    python3 - "$1" "${2:-localhost}" <<'PY'
+import importlib.util, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location('runtime_config', 'scripts/runtime-config.py')
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+module.reconcile(Path('/opt/shtab-ai-021'), sys.argv[1], sys.argv[2], 'READY_FOR_ADMIN')
+PY
+fi
+echo 'Продолжаем установку. Полученные файлы моделей и данные сохраняются.'
+systemctl reset-failed "$unit"
+# Avoid reading a stale FAILED status before the background process starts.
+printf 'RESUMING\n' > /var/lib/shtab-ai-021/status
+systemctl start --no-block "$unit"
+
+    )
+    host=$(sed -n 's/^SHTAB_HTTPS_HOST=//p' /opt/shtab-ai-021/.env | tail -1)
+    mode=$(cat /opt/shtab-ai-021/acceleration)
+    access=$(cat /opt/shtab-ai-021/access-mode 2>/dev/null || echo local)
+fi
 deadline=$((SECONDS+10800))
 while true; do
     status=$(cat /var/lib/shtab-ai-021/status 2>/dev/null || echo STARTING)
@@ -90,10 +142,12 @@ while true; do
 done
 /opt/shtab-ai-021/shtabctl certificate
 certificate=/usr/local/share/ca-certificates/shtab-ai-021.crt
-[[ ! -e $certificate ]] || { echo 'Сертификат с таким именем уже существует; остановлено без перезаписи.'; exit 1; }
+[[ ! -e $certificate ]] || cmp -s "$certificate" /opt/shtab-ai-021/shtab-ai-root.crt || { echo 'Другой сертификат с таким именем уже существует; остановлено без перезаписи.'; exit 1; }
 install -m 0644 /opt/shtab-ai-021/shtab-ai-root.crt "$certificate"
 update-ca-certificates
-/opt/shtab-ai-021/shtabctl bootstrap
+user_count=$(cd /opt/shtab-ai-021 && bash scripts/dc.sh exec -T db psql -U shtab_ai -d shtab_ai -Atc 'SELECT count(*) FROM secretary_users')
+[[ $user_count =~ ^[0-9]+$ ]] || { echo 'Не удалось проверить наличие администратора.'; exit 1; }
+if [[ $user_count == 0 ]]; then /opt/shtab-ai-021/shtabctl bootstrap; else echo 'Администратор уже создан; пользователи сохранены.'; fi
 python3 /opt/shtab-ai-021/scripts/create-desktop-shortcut.py /opt/shtab-ai-021 "${SUDO_USER:-}"
 url="https://$host/login"
 curl --fail --silent --show-error --noproxy '*' --cacert "$certificate" "$url" -o /dev/null
