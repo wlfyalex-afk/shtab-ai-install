@@ -113,7 +113,7 @@ try {
         if ((Split-Path $backup -Leaf) -notin @('ShtabAI-Backups','shtab-ai-021-backups')) { throw 'Папка резервных копий имеет неожиданное имя; её удаление остановлено.' }
     }
     Write-Host ('Удаляем тестовую установку: '+$root) -ForegroundColor Yellow
-    Write-Host 'Будут удалены её Ubuntu, база данных, модели, службы, ярлыки и сетевые правила.'
+    Write-Host 'Будут удалены её Ubuntu, база данных, службы, ярлыки и сетевые правила. Постоянный кэш архивов и моделей сохраняется.'
     Write-Host 'Закройте Far, Проводник и терминалы, работающие внутри папки приложения, чтобы они не удерживали файлы.'
     Write-Progress -Activity 'Очистка Штаб.AI' -Status 'Остановка собственной задачи и Ollama' -PercentComplete 10
     $scheduled=Get-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue

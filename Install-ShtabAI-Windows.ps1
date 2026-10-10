@@ -7,13 +7,14 @@ param(
     [ValidateRange(1024,65535)][int]$HTTPSPort=8445,
     [ValidatePattern('^(main|[a-f0-9]{40})$')][string]$Revision='main',
     [string]$InstallDir='',
+    [string]$CacheDir='',
     [switch]$KeepWindowOpen
 )
 $ErrorActionPreference='Stop'
 function Receive-ShtabBootstrap {
     param([string]$BaseUri, [string]$Work, [string]$Checksums)
     # Keep the repository layout: Install-WSL dot-sources its GPU helper.
-    $required=@('windows/Install-WSL.ps1','windows/Test-ShtabGPU.ps1','windows/Install-Progress.ps1')
+    $required=@('windows/Install-WSL.ps1','windows/Test-ShtabGPU.ps1','windows/Install-Progress.ps1','windows/Download-Cache.ps1')
     $lines=@(Get-Content -LiteralPath $Checksums -Encoding UTF8)
     foreach ($relative in $required) {
         $pattern='^[a-f0-9]{64}  '+[regex]::Escape($relative)+'$'
@@ -42,6 +43,10 @@ try {
             $InstallDir=[IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
             $arguments+=' -InstallDir "'+$InstallDir+'"'
         }
+        if ($CacheDir) {
+            if ($CacheDir -match '["\r\n]' -or $CacheDir -notmatch '^[A-Za-z]:\\') { throw 'Недопустимый путь кэша.' }
+            $arguments += ' -CacheDir "' + $CacheDir + '"'
+        }
         Write-Host 'Запрашиваем права администратора. Продолжайте в новом окне установки.' -ForegroundColor Yellow
         $process=Start-Process $powershell -Verb RunAs -ArgumentList $arguments -Wait -PassThru
         exit $process.ExitCode
@@ -62,7 +67,7 @@ try {
         Write-Host '[3/4] Скачиваем установщик Windows и необходимые служебные скрипты...' -ForegroundColor Cyan
         $installer=Receive-ShtabBootstrap -BaseUri $base -Work $work -Checksums $sums
         Write-Host '[4/4] Файлы проверены. Проверяем Windows и подготавливаем WSL...' -ForegroundColor Cyan
-        & $installer -DistroName $DistroName -Acceleration $Acceleration -Access $Access -HTTPSPort $HTTPSPort -Revision $Revision -InstallDir $InstallDir
+        & $installer -DistroName $DistroName -Acceleration $Acceleration -Access $Access -HTTPSPort $HTTPSPort -Revision $Revision -InstallDir $InstallDir -CacheDir $CacheDir
     } finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
     if ($KeepWindowOpen) { [void](Read-Host 'Нажмите Enter, чтобы закрыть окно установки') }
 } catch {

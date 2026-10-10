@@ -44,6 +44,8 @@ def compose_command():
     args = ['docker', 'compose', '-f', str(ROOT/'compose.yaml')]
     if (ROOT/'compose.storage.yaml').exists():
         args += ['-f', str(ROOT/'compose.storage.yaml')]
+    if (ROOT/'compose.cache.yaml').exists():
+        args += ['-f', str(ROOT/'compose.cache.yaml')]
     if (ROOT/'compose.gpu.yaml').exists():
         args += ['-f', str(ROOT/'compose.gpu.yaml')]
     return args

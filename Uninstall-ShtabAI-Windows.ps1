@@ -105,7 +105,7 @@ try {
     if ($manifest.TaskName -ne $taskName) { throw 'Задача автозапуска не соответствует установке.' }
     $task=Get-ScheduledTask -TaskName $taskName -TaskPath '\' -ErrorAction SilentlyContinue
     if ($task -and ($task.Actions.Arguments -notlike ('*'+(Join-Path $root 'Start-ShtabRuntime.ps1')+'*'))) { throw 'Неожиданная команда задачи автозапуска. Ничего не удалено.' }
-    Write-Host 'Будут удалены выбранный дистрибутив WSL, записи, пользователи, модели, Ollama, ярлыки и сетевые настройки этой установки. Новая резервная копия не создаётся.' -ForegroundColor Yellow
+    Write-Host 'Будут удалены выбранный дистрибутив WSL, записи, пользователи, Ollama, ярлыки и сетевые настройки этой установки. Модели внутри папки приложения удаляются; отдельный постоянный кэш сохраняется. Новая резервная копия не создаётся.' -ForegroundColor Yellow
     $answer=Read-Host ('Для подтверждения введите DELETE '+$DistroName+'')
     if ($answer -cne ('DELETE '+$DistroName)) { Write-Host 'Отменено.'; return }
     if ($task) {

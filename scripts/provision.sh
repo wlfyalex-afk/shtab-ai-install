@@ -68,7 +68,7 @@ stage DOWNLOADING_QWEN
 if [[ -n $external ]]; then
     SHTAB_PROGRESS_FILE="$PWD/download-progress/qwen-progress.json" python3 scripts/ollama-api.py pull
     python3 scripts/ollama-api.py check "$(cat windows-acceleration 2>/dev/null || echo cpu)"
-elif ! dc exec -T ollama ollama show qwen3:4b >/dev/null 2>&1; then
+else
     dc --profile setup run --rm qwen-download
 fi
 if [[ -z $external ]]; then

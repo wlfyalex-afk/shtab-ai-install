@@ -1,8 +1,65 @@
 ﻿#Requires -Version 5.1
 #Requires -RunAsAdministrator
 [CmdletBinding()]
-param([switch]$Resume, [switch]$RestartEarly)
+param([switch]$Resume, [switch]$RestartEarly, [string]$CacheDir = '')
 $ErrorActionPreference = 'Stop'
+function Receive-CachedFile {
+    param([string]$Uri, [string]$OutFile, [string]$SHA256)
+    if ($SHA256 -notmatch '^[a-fA-F0-9]{64}$') { throw 'Нет SHA256 для файла кэша.' }
+    $folder = Join-Path $script:CacheDir 'archives'
+    New-Item -ItemType Directory -Path $folder -Force | Out-Null
+    $cached = Join-Path $folder ($SHA256.ToLowerInvariant() + '-' + (Split-Path $OutFile -Leaf))
+    $lock = [IO.File]::Open(($cached + '.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
+    try {
+        if (Test-Path -LiteralPath $cached) {
+            Write-Host ('Проверяем SHA256 файла из кэша: ' + (Split-Path $OutFile -Leaf)) -ForegroundColor Cyan
+            if ((Get-FileHash -LiteralPath $cached -Algorithm SHA256).Hash -ine $SHA256) {
+                Remove-Item -LiteralPath $cached -Force
+                Write-Host 'Файл повреждён. Скачиваем заново.' -ForegroundColor Yellow
+            }
+        }
+        if (-not (Test-Path -LiteralPath $cached)) {
+            # Also accept standard archive names copied here by the user.
+            $names = @((Split-Path $OutFile -Leaf), ([Uri]$Uri).Segments[-1]) | Select-Object -Unique
+            foreach ($name in $names) {
+                foreach ($directory in @($script:CacheDir, $folder)) {
+                    $existing = Join-Path $directory $name
+                    if ((Test-Path -LiteralPath $existing -PathType Leaf) -and
+                        (Get-FileHash -LiteralPath $existing -Algorithm SHA256).Hash -ieq $SHA256) {
+                        Copy-Item -LiteralPath $existing -Destination $cached -Force
+                        Write-Host ('Проверен и добавлен в кэш: ' + $existing) -ForegroundColor Green
+                        break
+                    }
+                }
+                if (Test-Path -LiteralPath $cached) { break }
+            }
+        }
+        if (-not (Test-Path -LiteralPath $cached)) {
+            $partial = $cached + '.partial'
+            Receive-File -Uri $Uri -OutFile $partial
+            if ((Get-FileHash -LiteralPath $partial -Algorithm SHA256).Hash -ine $SHA256) {
+                Remove-Item -LiteralPath $partial -Force
+                throw 'Контрольная сумма загруженного файла не совпала.'
+            }
+            Move-Item -LiteralPath $partial -Destination $cached -Force
+        } else { Write-Host 'Контрольная сумма совпала — используем кэш, без скачивания.' -ForegroundColor Green }
+        Copy-Item -LiteralPath $cached -Destination $OutFile -Force
+    } finally { $lock.Dispose() }
+}
+function Test-CachedOllamaModels {
+    param([string]$Models)
+    $blobs = Join-Path $Models 'blobs'
+    if (Test-Path -LiteralPath $blobs) {
+        Get-ChildItem -LiteralPath $blobs -File | Where-Object Name -match '^sha256-[a-f0-9]{64}$' | ForEach-Object {
+            Write-Host ('Проверяем SHA256 слоя Qwen: ' + $_.Name) -ForegroundColor Cyan
+            if ((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash -ine $_.Name.Substring(7)) {
+                Remove-Item -LiteralPath $_.FullName -Force
+                Write-Host 'Повреждённый слой удалён; Ollama загрузит его снова.' -ForegroundColor Yellow
+            }
+        }
+    }
+}
+
 [Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)
 $OutputEncoding = [Console]::OutputEncoding
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -527,6 +584,16 @@ if ($Revision -eq 'main') {
     $Revision = $head.sha
 }
 if ($Revision -notmatch '^[a-f0-9]{40}$') { throw 'Не удалось определить фиксированную версию приложения.' }
+if (-not $CacheDir) {
+    $defaultCache = Join-Path (Split-Path $root -Parent) 'Shtab.AI-Cache'
+    $CacheDir = Read-Host ("Папка постоянного кэша дистрибутивов и моделей [$defaultCache]")
+    if (-not $CacheDir) { $CacheDir = $defaultCache }
+}
+if ($CacheDir -notmatch '^[A-Za-z]:\\' -or $CacheDir -match '["\r\n]') { throw 'Укажите полный локальный путь к кэшу.' }
+$script:CacheDir = [IO.Path]::GetFullPath($CacheDir).TrimEnd('\')
+if ($script:CacheDir -ieq $root -or $script:CacheDir.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase) -or $root.StartsWith($script:CacheDir + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Кэш и приложение должны находиться в отдельных папках.' }
+New-Item -ItemType Directory -Path $script:CacheDir -Force | Out-Null
+Write-Host ("Постоянный кэш: $script:CacheDir. При удалении приложения он сохраняется.") -ForegroundColor Cyan
 $work = Join-Path $ancestor ('shtab-wsl-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory $work | Out-Null
 try {
@@ -569,7 +636,7 @@ try {
         $matches = [regex]::Matches($text,('(?im)^([a-f0-9]{64})[ \t]+\*?' + [regex]::Escape($imageName) + '[ \t]*\r?$'))
         if ($matches.Count -ne 1) { throw 'Не найдена контрольная сумма образа Ubuntu WSL.' }
         Write-Host 'Скачиваем образ Ubuntu 24.04 для WSL...'
-        Receive-File -Uri ($imageBase + $imageName) -OutFile $image
+        Receive-CachedFile -Uri ($imageBase + $imageName) -OutFile $image -SHA256 $matches[0].Groups[1].Value
         if ((Get-FileHash $image -Algorithm SHA256).Hash.ToLowerInvariant() -ne $matches[0].Groups[1].Value.ToLowerInvariant()) { throw 'Контрольная сумма образа Ubuntu не совпала.' }
         Show-Stage 4 'Создание Linux-среды и проверка видеокарты'
         New-Item -ItemType Directory $root -Force | Out-Null
@@ -620,19 +687,24 @@ try {
     Show-Stage 5 'Установка Ollama и библиотек видеокарт'
     Write-Host 'Скачиваем Ollama для Windows и библиотеки видеокарт...'
     $ollamaZip = Join-Path $work 'ollama.zip'
-    Receive-File -Uri 'https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-windows-amd64.zip' -OutFile $ollamaZip
+    Receive-CachedFile -Uri 'https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-windows-amd64.zip' -OutFile $ollamaZip -SHA256 '428c94622a04764b318ddf13a061898edf69e32ffa896f638ed6015fd3f33288'
     if ((Get-FileHash $ollamaZip -Algorithm SHA256).Hash.ToLowerInvariant() -ne '428c94622a04764b318ddf13a061898edf69e32ffa896f638ed6015fd3f33288') { throw 'Контрольная сумма Ollama не совпала.' }
     $ollamaDir = Join-Path $root 'ollama'
     Expand-Archive -LiteralPath $ollamaZip -DestinationPath $ollamaDir
     if ($Acceleration -eq 'amd') {
         $rocmZip = Join-Path $work 'ollama-rocm.zip'
-        Receive-File -Uri 'https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-windows-amd64-rocm.zip' -OutFile $rocmZip
+        Receive-CachedFile -Uri 'https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-windows-amd64-rocm.zip' -OutFile $rocmZip -SHA256 'a290510b3ee3b743de54eb3fbae99b69f19a49485f42ce6bcf4a1a6f86e4ba01'
         if ((Get-FileHash $rocmZip -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'a290510b3ee3b743de54eb3fbae99b69f19a49485f42ce6bcf4a1a6f86e4ba01') { throw 'Контрольная сумма библиотек AMD не совпала.' }
         Expand-Archive -LiteralPath $rocmZip -DestinationPath $ollamaDir -Force
     }
     Show-Stage 6 'Настройка автозапуска, сети и запуск Ollama'
     Copy-Item -LiteralPath (Join-Path $package 'windows\Start-ShtabRuntime.ps1') -Destination $root
     Copy-Item -LiteralPath (Join-Path $package 'windows\Manage-ShtabAI.ps1') -Destination $root
+    $manifest['ModelsPath'] = Join-Path $script:CacheDir 'qwen'
+    $manifest['CacheDir'] = $script:CacheDir
+    New-Item -ItemType Directory -Path $manifest.ModelsPath -Force | Out-Null
+    Test-CachedOllamaModels $manifest.ModelsPath
+    Write-UTF8 $manifestPath ($manifest | ConvertTo-Json)
     $runtime = Join-Path $root 'Start-ShtabRuntime.ps1'
     $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $action = New-ScheduledTaskAction -Execute $powershell -Argument ('-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $runtime + '" -ManifestPath "' + $manifestPath + '"')
@@ -656,7 +728,8 @@ try {
     $lanAddress = [string]$runtimeState.LANAddress
     $httpsHost = if ($lanAddress) { $lanAddress } else { 'localhost' }
     $guestArchive = (Invoke-Guest wslpath -u $archive | Out-String).Trim()
-    $setup = 'set -euo pipefail; apt-get update; DEBIAN_FRONTEND=noninteractive apt-get install -y unzip python3 curl ca-certificates openssl; work=$(mktemp -d); trap ''rm -rf "$work"'' EXIT; unzip -q ' + (Quote-Shell $guestArchive) + ' -d "$work"; cd "$work"/*; sha256sum --quiet -c SHA256SUMS; SHTAB_EXTERNAL_OLLAMA_ENDPOINT=' + (Quote-Shell $runtimeState.Endpoint) + ' SHTAB_WINDOWS_ACCELERATION=' + $Acceleration + ' SHTAB_HTTPS_PORT=' + $HTTPSPort + ' bash install.sh ' + $httpsHost + ' ' + $guestMode
+    $guestCache = (Invoke-Guest wslpath -u $script:CacheDir | Out-String).Trim()
+    $setup = 'set -euo pipefail; apt-get update; DEBIAN_FRONTEND=noninteractive apt-get install -y unzip python3 curl ca-certificates openssl; work=$(mktemp -d); trap ''rm -rf "$work"'' EXIT; unzip -q ' + (Quote-Shell $guestArchive) + ' -d "$work"; cd "$work"/*; sha256sum --quiet -c SHA256SUMS; SHTAB_EXTERNAL_OLLAMA_ENDPOINT=' + (Quote-Shell $runtimeState.Endpoint) + ' SHTAB_MODEL_CACHE=' + (Quote-Shell $guestCache) + ' SHTAB_WINDOWS_ACCELERATION=' + $Acceleration + ' SHTAB_HTTPS_PORT=' + $HTTPSPort + ' bash install.sh ' + $httpsHost + ' ' + $guestMode
     Show-Stage 7 'Подготовка пакетов Ubuntu и запуск установки приложения'
     Invoke-Guest /bin/bash -c $setup
     $guestBackups = (Invoke-Guest wslpath -u $backupPath | Out-String).Trim()

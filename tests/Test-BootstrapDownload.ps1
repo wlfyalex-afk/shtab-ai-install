@@ -14,7 +14,8 @@ try {
     Set-Content -LiteralPath (Join-Path $script:fixture 'source/windows/Install-WSL.ps1') -Encoding UTF8 -Value '. (Join-Path $PSScriptRoot ''Test-ShtabGPU.ps1''); . (Join-Path $PSScriptRoot ''Install-Progress.ps1''); ''bootstrap-ready'''
     Copy-Item (Join-Path $repo 'windows/Test-ShtabGPU.ps1') (Join-Path $script:fixture 'source/windows/Test-ShtabGPU.ps1')
     Copy-Item (Join-Path $repo 'windows/Install-Progress.ps1') (Join-Path $script:fixture 'source/windows/Install-Progress.ps1')
-    $lines=@('windows/Install-WSL.ps1','windows/Test-ShtabGPU.ps1','windows/Install-Progress.ps1') | ForEach-Object {
+    Copy-Item (Join-Path $repo 'windows/Download-Cache.ps1') (Join-Path $script:fixture 'source/windows/Download-Cache.ps1')
+    $lines=@('windows/Install-WSL.ps1','windows/Test-ShtabGPU.ps1','windows/Install-Progress.ps1','windows/Download-Cache.ps1') | ForEach-Object {
         (Get-FileHash (Join-Path $script:fixture ('source/'+$_)) -Algorithm SHA256).Hash.ToLowerInvariant()+'  '+$_
     }
     $sums=Join-Path $script:fixture 'SHA256SUMS'
