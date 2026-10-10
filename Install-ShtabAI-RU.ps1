@@ -63,12 +63,12 @@ function Test-CachedOllamaModels {
 [Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)
 $OutputEncoding = [Console]::OutputEncoding
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
- $progressState = @{
+$ProgressPreference = 'Continue'
+$progressState = @{
     InstallClock = [Diagnostics.Stopwatch]::StartNew()
     StageClock = [Diagnostics.Stopwatch]::StartNew()
     StageNumber = 0
     StageTitle = 'Подготовка'
-    LastHeartbeat = [DateTime]::MinValue
     Finished = $false
 }
 
@@ -84,13 +84,13 @@ function Format-Time([TimeSpan]$Time) {
 }
 function Show-ModelProgress($Data) {
     if (-not $Data) {
-        Write-Progress -Id 3 -Activity 'Загрузка модели' -Status 'Ожидаем данные загрузчика' -PercentComplete -1
+        Write-Progress -Id 3 -ParentId 1 -Activity 'Загрузка модели' -Status 'Ожидаем данные загрузчика' -PercentComplete -1
         return
     }
     $title = if ($Data.model -eq 'qwen') { 'Qwen — текущий слой' } else { 'Whisper — файлы модели' }
     if ($Data.phase -ne 'download') {
         $text = if ($Data.phase -eq 'error') { 'Ошибка загрузки — см. журнал' } elseif ($Data.phase -eq 'done') { 'Модель готова' } else { 'Файлы получены. Проверка модели' }
-        Write-Progress -Id 3 -Activity $title -Status $text -PercentComplete -1
+        Write-Progress -Id 3 -ParentId 1 -Activity $title -Status $text -PercentComplete -1
         return
     }
     $done = [double]$Data.completed; $total = [double]$Data.total
@@ -102,11 +102,16 @@ function Show-ModelProgress($Data) {
     if ($null -ne $Data.eta_seconds) { $eta = Format-Time ([TimeSpan]::FromSeconds([double]$Data.eta_seconds)) }
     $text = $amount + ' | ' + (Format-Size ([double]$Data.bytes_per_second)) + '/с | осталось ' + $eta
     if ($Data.stale) { $text += ' | ожидаем новые данные' }
-    Write-Progress -Id 3 -Activity $title -Status $text -PercentComplete $percent
-    if (-not $script:LastModelMessage -or ((Get-Date)-$script:LastModelMessage).TotalSeconds -ge 30) {
-        Write-Host ($title + ': ' + $text)
-        $script:LastModelMessage=Get-Date
+    Write-Progress -Id 3 -ParentId 1 -Activity $title -Status $text -PercentComplete $percent
+
+}
+
+function Show-OperationProgress($Data) {
+    if (-not $Data) {
+        Write-Progress -Id 3 -ParentId 1 -Activity 'Текущая операция' -Completed
+        return
     }
+    Write-Progress -Id 3 -ParentId 1 -Activity ([string]$Data.title) -Status ([string]$Data.text) -PercentComplete ([int]$Data.percent)
 }
 
 function Show-Disks {
@@ -123,24 +128,16 @@ function Show-Disks {
 }
 function Show-Stage([int]$Number, [string]$Title) {
     if ($progressState.StageNumber -ne $Number) {
-        if ($progressState.StageNumber -gt 0) {
-            Write-Host ('Предыдущий этап завершён за ' + (Format-Time $progressState.StageClock.Elapsed)) -ForegroundColor Green
-        }
         $progressState.StageNumber = $Number
         $progressState.StageTitle = $Title
         $progressState.StageClock.Restart()
-        Write-Host ''
-        Write-Host ('Этап {0}/17: {1}' -f $Number, $Title) -ForegroundColor Cyan
-        $progressState.LastHeartbeat = [DateTime]::MinValue
+
     }
     $percent = [int][Math]::Floor(($Number - 1) * 100 / 17)
     $elapsed = Format-Time $progressState.InstallClock.Elapsed
     $stageElapsed = Format-Time $progressState.StageClock.Elapsed
     Write-Progress -Id 1 -Activity 'Установка Штаб.AI' -Status ('{0}/17: {1} | всего {2} | этап {3}' -f $Number,$Title,$elapsed,$stageElapsed) -PercentComplete $percent
-    if (((Get-Date) - $progressState.LastHeartbeat).TotalSeconds -ge 30) {
-        Write-Host ('Завершено вех: {0}/17. Прошло: {1}; текущий этап: {2}. Остаток времени: уточняется.' -f ($Number-1),$elapsed,$stageElapsed)
-        $progressState.LastHeartbeat = Get-Date
-    }
+
 }
 function Show-AppStage([string]$Status) {
     switch ($Status) {
@@ -162,7 +159,7 @@ function Complete-Stages {
     $progressState.Finished = $true
     Write-Progress -Id 1 -Activity 'Установка Штаб.AI' -Status 'Все проверки пройдены' -PercentComplete 100
     Write-Host ('Завершено: 17/17 вех. Общее время: ' + (Format-Time $progressState.InstallClock.Elapsed)) -ForegroundColor Green
-    Write-Progress -Id 3 -Activity 'Загрузка модели' -Completed
+    Write-Progress -Id 3 -ParentId 1 -Activity 'Загрузка модели' -Completed
     Write-Progress -Id 1 -Activity 'Установка Штаб.AI' -Completed
 }
 
@@ -187,7 +184,6 @@ function Receive-File([string]$Uri, [string]$OutFile) {
         $received = [long]0
         $clock = [Diagnostics.Stopwatch]::StartNew()
         $lastUpdate = -1.0
-        $lastConsole = -15.0
         while (($read = $inputStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
             $outputStream.Write($buffer, 0, $read)
             $received += $read
@@ -207,12 +203,9 @@ function Receive-File([string]$Uri, [string]$OutFile) {
                     }
                 }
                 $statusText = '{0} | {1}/с | прошло {2} | осталось {3}' -f $sizes,(Format-Size $rate),(Format-Time $clock.Elapsed),$eta
+                if ($percent -ge 0) { $statusText = ('{0}% | ' -f $percent) + $statusText }
                 Show-Stage $progressState.StageNumber $progressState.StageTitle
                 Write-Progress -Id 2 -ParentId 1 -Activity ('Загрузка: ' + $name) -Status $statusText -PercentComplete $percent -SecondsRemaining $remaining
-                if ($clock.Elapsed.TotalSeconds - $lastConsole -ge 15) {
-                    Write-Host $statusText
-                    $lastConsole = $clock.Elapsed.TotalSeconds
-                }
                 $lastUpdate = $clock.Elapsed.TotalSeconds
             }
         }
@@ -220,7 +213,7 @@ function Receive-File([string]$Uri, [string]$OutFile) {
         $outputStream = $null
         if ($total -ge 0 -and $received -ne $total) { throw 'Сервер передал неполный файл.' }
         Move-Item -LiteralPath $part -Destination $OutFile -Force
-        Write-Host ('Скачано: {0}, размер {1}, время {2}' -f $name,(Format-Size $received),(Format-Time $clock.Elapsed)) -ForegroundColor Green
+        Write-Host ('Скачано 100%: {0}, размер {1}, время {2}' -f $name,(Format-Size $received),(Format-Time $clock.Elapsed)) -ForegroundColor Green
     } catch {
         throw ('Не удалось скачать ' + $name + ': ' + $_.Exception.Message)
     } finally {
@@ -231,6 +224,7 @@ function Receive-File([string]$Uri, [string]$OutFile) {
         Write-Progress -Id 2 -Activity ('Загрузка: ' + $name) -Completed
     }
 }
+
 
 function Get-EarlyInstallation([string]$DistroName, [string]$ExpectedRoot = '') {
     $registrationFile = Join-Path (Join-Path $env:LOCALAPPDATA 'ShtabAI') ($DistroName + '.json')
@@ -737,14 +731,11 @@ try {
     Invoke-Guest /bin/bash -c ('printf ''%s\n'' ' + (Quote-Shell $guestBackups) + ' > /opt/shtab-ai-021/backup-directory')
     $started = Get-Date
     $deadline = $started.AddHours(3)
-    $lastStatus = ''
     do {
         $snapshot = (Invoke-Guest /usr/bin/python3 /opt/shtab-ai-021/scripts/install-progress.py --json | Out-String) | ConvertFrom-Json
         $status = [string]$snapshot.status
-        $elapsed = ((Get-Date) - $started).ToString('hh\:mm\:ss')
         Show-AppStage $status
-        if ($status -in @('DOWNLOADING_QWEN','DOWNLOADING_WHISPER')) { Show-ModelProgress $snapshot.progress } else { Write-Progress -Id 3 -Activity 'Загрузка модели' -Completed }
-        $lastStatus=$status
+        if ($status -in @('DOWNLOADING_QWEN','DOWNLOADING_WHISPER')) { Show-ModelProgress $snapshot.progress } else { Show-OperationProgress $snapshot.operation }
         if ($status -eq 'READY_FOR_ADMIN') { break }
         if ($status -like 'FAILED*' -or (Get-Date) -gt $deadline) {
             Invoke-Guest /bin/journalctl -u shtab-ai-install -n 80 --no-pager
@@ -752,6 +743,7 @@ try {
         }
         Start-Sleep -Seconds 10
     } while ($true)
+    Write-Progress -Id 3 -Activity 'Текущая операция' -Completed
     Show-Stage 15 'Настройка сертификата HTTPS'
     Invoke-Guest /opt/shtab-ai-021/shtabctl certificate
     $cert = Join-Path $root 'shtab-ai-root.crt'
