@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -116,11 +117,12 @@ class InstallerTests(unittest.TestCase):
             class Api:
                 def model_info(self, repo, **kwargs):
                     api_calls.append(repo)
-                    return types.SimpleNamespace(sha='fixed-commit')
+                    return types.SimpleNamespace(sha='fixed-commit', siblings=[types.SimpleNamespace(rfilename='model.bin', size=5, lfs=types.SimpleNamespace(sha256=hashlib.sha256(b'model').hexdigest()))])
             def snapshot(**kw):
                 downloads.append(kw)
                 if len(downloads) == 1:
                     raise RuntimeError('network interrupted')
+                (type(temp)(kw['local_dir'])/'model.bin').write_bytes(b'model')
                 return kw['local_dir']
             def model(*a, **kw):
                 loads.append((a,kw))
@@ -132,13 +134,13 @@ class InstallerTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError,'network interrupted'):
                     runpy.run_path(str(ROOT/'scripts/download-asr.py'))
                 runpy.run_path(str(ROOT/'scripts/download-asr.py'))
-                with self.assertRaises(SystemExit) as stop:
-                    runpy.run_path(str(ROOT/'scripts/download-asr.py'))
-                self.assertEqual(stop.exception.code,0)
-            self.assertEqual(len(api_calls),1)
-            self.assertEqual(len(downloads),2)
+                runpy.run_path(str(ROOT/'scripts/download-asr.py'))
+                (temp/'srv/shtab-ai/response-models/turbo/model.bin').write_bytes(b'wrong')
+                runpy.run_path(str(ROOT/'scripts/download-asr.py'))
+            self.assertEqual(len(api_calls),4)
+            self.assertEqual(len(downloads),3)
             self.assertEqual(downloads[0]['revision'],downloads[1]['revision'])
-            self.assertEqual(len(loads),2)
+            self.assertEqual(len(loads),3)
 
     def test_asr_bad_existing_model_blocks_ready(self):
         with tempfile.TemporaryDirectory() as d:
@@ -148,7 +150,11 @@ class InstallerTests(unittest.TestCase):
             (model_root/'shtab-model.json').write_text('{}')
             def broken(*a,**kw): raise RuntimeError('corrupt model')
             sys.path.insert(0, str(ROOT/'scripts'))
-            modules = {'huggingface_hub': types.SimpleNamespace(HfApi=None,snapshot_download=None),
+            (model_root/'model.bin').write_bytes(b'model')
+            class Api:
+                def model_info(self, repo, **kwargs):
+                    return types.SimpleNamespace(sha='fixed-commit', siblings=[types.SimpleNamespace(rfilename='model.bin', size=5, lfs=types.SimpleNamespace(sha256=hashlib.sha256(b'model').hexdigest()))])
+            modules = {'huggingface_hub': types.SimpleNamespace(HfApi=Api,snapshot_download=None),
                        'faster_whisper': types.SimpleNamespace(WhisperModel=broken)}
             with patch('pathlib.Path',lambda value: temp/str(value).lstrip('/')), patch.dict(sys.modules,modules), patch.dict(os.environ, {'SHTAB_PROGRESS_FILE': str(temp/'progress.json')}), patch('model_progress.Path', lambda value: temp/'progress.json'):
                 with self.assertRaisesRegex(RuntimeError,'corrupt model'):

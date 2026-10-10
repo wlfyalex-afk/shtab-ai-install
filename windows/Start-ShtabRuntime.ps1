@@ -110,7 +110,7 @@ try {
             if ($rule) { Remove-NetFirewallRule -Name $ruleName }
             New-NetFirewallRule -Name $ruleName -DisplayName ('ShtabAI native Ollama ' + $manifest.DistroName) -Group 'ShtabAI' -Direction Inbound -Action Allow -Protocol TCP -LocalAddress $gateway -LocalPort 11435 -RemoteAddress $ip -Profile Any | Out-Null
             $env:OLLAMA_HOST = "${gateway}:11435"
-            $env:OLLAMA_MODELS = Join-Path $root 'models'
+            $env:OLLAMA_MODELS = if ($manifest.ModelsPath) { [string]$manifest.ModelsPath } else { Join-Path $root 'models' }
             $env:OLLAMA_KEEP_ALIVE = '0'
             $env:OLLAMA_NUM_PARALLEL = '1'
             $env:OLLAMA_MAX_LOADED_MODELS = '1'

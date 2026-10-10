@@ -7,11 +7,13 @@ param(
     [ValidateSet('ask','local','lan')][string]$Access = 'ask',
     [ValidateRange(1024,65535)][int]$HTTPSPort = 8445,
     [ValidatePattern('^(main|[a-f0-9]{40})$')][string]$Revision = 'main',
-    [string]$InstallDir = ''
+    [string]$InstallDir = '',
+    [string]$CacheDir = ''
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Install-Progress.ps1')
 . (Join-Path $PSScriptRoot 'Test-ShtabGPU.ps1')
+. (Join-Path $PSScriptRoot 'Download-Cache.ps1')
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 function Invoke-WSL {
     & $script:wsl @args
@@ -253,6 +255,16 @@ if ($Revision -eq 'main') {
     $Revision = $head.sha
 }
 if ($Revision -notmatch '^[a-f0-9]{40}$') { throw 'Не удалось определить фиксированную версию приложения.' }
+if (-not $CacheDir) {
+    $defaultCache = Join-Path (Split-Path $root -Parent) 'Shtab.AI-Cache'
+    $CacheDir = Read-Host ("Папка постоянного кэша дистрибутивов и моделей [$defaultCache]")
+    if (-not $CacheDir) { $CacheDir = $defaultCache }
+}
+if ($CacheDir -notmatch '^[A-Za-z]:\\' -or $CacheDir -match '["\r\n]') { throw 'Укажите полный локальный путь к кэшу.' }
+$script:CacheDir = [IO.Path]::GetFullPath($CacheDir).TrimEnd('\')
+if ($script:CacheDir -ieq $root -or $script:CacheDir.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase) -or $root.StartsWith($script:CacheDir + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Кэш и приложение должны находиться в отдельных папках.' }
+New-Item -ItemType Directory -Path $script:CacheDir -Force | Out-Null
+Write-Host ("Постоянный кэш: $script:CacheDir. При удалении приложения он сохраняется.") -ForegroundColor Cyan
 $work = Join-Path $ancestor ('shtab-wsl-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory $work | Out-Null
 try {
@@ -282,7 +294,7 @@ try {
     $matches = [regex]::Matches($text,('(?im)^([a-f0-9]{64})[ \t]+\*?' + [regex]::Escape($imageName) + '[ \t]*\r?$'))
     if ($matches.Count -ne 1) { throw 'Контрольная сумма образа Ubuntu WSL недоступна.' }
     Write-Host 'Скачиваем образ Ubuntu 24.04 для WSL...'
-    Receive-File -Uri ($imageBase + $imageName) -OutFile $image
+    Receive-CachedFile -Uri ($imageBase + $imageName) -OutFile $image -SHA256 $matches[0].Groups[1].Value
     if ((Get-FileHash $image -Algorithm SHA256).Hash.ToLowerInvariant() -ne $matches[0].Groups[1].Value.ToLowerInvariant()) { throw 'Не совпала контрольная сумма образа Ubuntu.' }
     Show-Stage 4 'Создание Linux-среды и проверка видеокарты'
     New-Item -ItemType Directory $root -Force | Out-Null
@@ -329,19 +341,24 @@ try {
     Write-Host 'Скачиваем Ollama для Windows (включая библиотеки видеокарт)...'
     Show-Stage 5 'Установка Ollama и библиотек видеокарт'
     $ollamaZip = Join-Path $work 'ollama.zip'
-    Receive-File -Uri 'https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-windows-amd64.zip' -OutFile $ollamaZip
+    Receive-CachedFile -Uri 'https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-windows-amd64.zip' -OutFile $ollamaZip -SHA256 '428c94622a04764b318ddf13a061898edf69e32ffa896f638ed6015fd3f33288'
     if ((Get-FileHash $ollamaZip -Algorithm SHA256).Hash.ToLowerInvariant() -ne '428c94622a04764b318ddf13a061898edf69e32ffa896f638ed6015fd3f33288') { throw 'Не совпала контрольная сумма Ollama.' }
     $ollamaDir = Join-Path $root 'ollama'
     Expand-Archive -LiteralPath $ollamaZip -DestinationPath $ollamaDir
     if ($Acceleration -eq 'amd') {
         $rocmZip = Join-Path $work 'ollama-rocm.zip'
-        Receive-File -Uri 'https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-windows-amd64-rocm.zip' -OutFile $rocmZip
+        Receive-CachedFile -Uri 'https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-windows-amd64-rocm.zip' -OutFile $rocmZip -SHA256 'a290510b3ee3b743de54eb3fbae99b69f19a49485f42ce6bcf4a1a6f86e4ba01'
         if ((Get-FileHash $rocmZip -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'a290510b3ee3b743de54eb3fbae99b69f19a49485f42ce6bcf4a1a6f86e4ba01') { throw 'Не совпала контрольная сумма библиотек AMD.' }
         Expand-Archive -LiteralPath $rocmZip -DestinationPath $ollamaDir -Force
     }
     Show-Stage 6 'Настройка автозапуска, сети и запуск Ollama'
     Copy-Item -LiteralPath (Join-Path $package 'windows\Start-ShtabRuntime.ps1') -Destination $root
     Copy-Item -LiteralPath (Join-Path $package 'windows\Manage-ShtabAI.ps1') -Destination $root
+    $manifest['ModelsPath'] = Join-Path $script:CacheDir 'qwen'
+    $manifest['CacheDir'] = $script:CacheDir
+    New-Item -ItemType Directory -Path $manifest.ModelsPath -Force | Out-Null
+    Test-CachedOllamaModels $manifest.ModelsPath
+    Write-UTF8 $manifestPath ($manifest | ConvertTo-Json)
     $runtime = Join-Path $root 'Start-ShtabRuntime.ps1'
     $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $action = New-ScheduledTaskAction -Execute $powershell -Argument ('-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $runtime + '" -ManifestPath "' + $manifestPath + '"')
@@ -366,7 +383,8 @@ try {
     $httpsHost = if ($lanAddress) { $lanAddress } else { 'localhost' }
     Show-Stage 7 'Подготовка пакетов Ubuntu и запуск установки приложения'
     $guestArchive = (Invoke-Guest wslpath -u $archive | Out-String).Trim()
-    $setup = 'set -euo pipefail; apt-get update; DEBIAN_FRONTEND=noninteractive apt-get install -y unzip python3 curl ca-certificates openssl; work=$(mktemp -d); trap ''rm -rf "$work"'' EXIT; unzip -q ' + (Quote-Shell $guestArchive) + ' -d "$work"; cd "$work"/*; sha256sum --quiet -c SHA256SUMS; SHTAB_EXTERNAL_OLLAMA_ENDPOINT=' + (Quote-Shell $runtimeState.Endpoint) + ' SHTAB_WINDOWS_ACCELERATION=' + $Acceleration + ' SHTAB_HTTPS_PORT=' + $HTTPSPort + ' bash install.sh ' + $httpsHost + ' ' + $guestMode
+    $guestCache = (Invoke-Guest wslpath -u $script:CacheDir | Out-String).Trim()
+    $setup = 'set -euo pipefail; apt-get update; DEBIAN_FRONTEND=noninteractive apt-get install -y unzip python3 curl ca-certificates openssl; work=$(mktemp -d); trap ''rm -rf "$work"'' EXIT; unzip -q ' + (Quote-Shell $guestArchive) + ' -d "$work"; cd "$work"/*; sha256sum --quiet -c SHA256SUMS; SHTAB_EXTERNAL_OLLAMA_ENDPOINT=' + (Quote-Shell $runtimeState.Endpoint) + ' SHTAB_MODEL_CACHE=' + (Quote-Shell $guestCache) + ' SHTAB_WINDOWS_ACCELERATION=' + $Acceleration + ' SHTAB_HTTPS_PORT=' + $HTTPSPort + ' bash install.sh ' + $httpsHost + ' ' + $guestMode
     Invoke-Guest /bin/bash -c $setup
     $guestBackups = (Invoke-Guest wslpath -u $backupPath | Out-String).Trim()
     Invoke-Guest /bin/bash -c ('printf ''%s\n'' ' + (Quote-Shell $guestBackups) + ' > /opt/shtab-ai-021/backup-directory')

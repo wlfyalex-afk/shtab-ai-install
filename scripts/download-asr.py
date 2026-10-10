@@ -7,7 +7,8 @@ from gpu_fallback import verify_whisper
 from model_progress import Reporter
 # HTTP writes incremental .incomplete files, which the monitor can measure.
 os.environ["HF_HUB_DISABLE_XET"] = "1"
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from model_cache import matches as matches_file
 from huggingface_hub import snapshot_download, HfApi
 from faster_whisper import WhisperModel
 
@@ -31,22 +32,33 @@ def verify_model(path):
     result_path.write_text(json.dumps(result, ensure_ascii=False))
     print('Whisper: ' + device + ('; GPU не подошла, проверка CPU пройдена' if reason else '; пробное распознавание пройдено'), flush=True)
 
-if marker.exists():
-    verify_model(root)
-    print('ASR already installed and loaded successfully', flush=True)
-    raise SystemExit(0)
 root.mkdir(parents=True, exist_ok=True)
 download_marker = root / 'shtab-download.json'
-if download_marker.exists():
-    metadata = json.loads(download_marker.read_text())
-    revision = metadata['revision']
-else:
-    info = HfApi().model_info(repo, files_metadata=True)
-    revision = info.sha
-    metadata = {'repository': repo, 'revision': revision, 'files': [
-        {'name': item.rfilename, 'size': item.size, 'etag': (getattr(item.lfs, 'sha256', None) if item.lfs else item.blob_id)}
-        for item in (getattr(info, 'siblings', None) or []) if item.size is not None]}
-    download_marker.write_text(json.dumps(metadata))
+# Resolve the current upstream revision on each install. Immutable hashes validate
+# every cached file; a successful previous load alone is not an integrity check.
+info = HfApi().model_info(repo, files_metadata=True)
+revision = info.sha
+metadata = {'repository': repo, 'revision': revision, 'files': [
+    {'name': item.rfilename, 'size': item.size, 'etag': (getattr(item.lfs, 'sha256', None) if item.lfs else item.blob_id)}
+    for item in (getattr(info, 'siblings', None) or []) if item.size is not None]}
+if not metadata['files']:
+    raise RuntimeError('Whisper upstream returned no file hashes')
+marker.unlink(missing_ok=True)
+all_valid = True
+for item in metadata['files']:
+    relative = PurePosixPath(item['name'])
+    if relative.is_absolute() or '..' in relative.parts:
+        raise ValueError('Unsafe upstream model filename')
+    final = root / relative
+    if not final.exists():
+        all_valid = False
+    if final.exists():
+        print('Проверяем контрольную сумму Whisper: ' + item['name'], flush=True)
+        if not matches_file(final, item['etag'], item['size']):
+            all_valid = False
+            final.unlink()
+            print('Файл изменился или повреждён — будет скачан заново.', flush=True)
+download_marker.write_text(json.dumps(metadata))
 progress = Reporter('whisper')
 files = metadata.get('files', [])
 stop = threading.Event()
@@ -86,7 +98,11 @@ progress.update(*measure(), detail='Файлы Whisper', force=True)
 thread = threading.Thread(target=monitor, daemon=True)
 thread.start()
 try:
-    path = snapshot_download(repo_id=repo, revision=revision, local_dir=str(root))
+    if all_valid:
+        print('Whisper: контрольные суммы совпали — используем кэш без скачивания.', flush=True)
+        path = str(root)
+    else:
+        path = snapshot_download(repo_id=repo, revision=revision, local_dir=str(root))
 except Exception:
     stop.set()
     thread.join()
@@ -96,6 +112,9 @@ finally:
     stop.set()
     thread.join()
 progress.update(*measure(), phase='verify', force=True)
+for item in metadata['files']:
+    if not matches_file(root / item['name'], item['etag'], item['size']):
+        raise RuntimeError('Whisper hash mismatch: ' + item['name'])
 verify_model(path)
 print('ASR downloaded and loaded successfully', flush=True)
 marker.write_text(json.dumps({'repository': repo, 'revision': revision}))
