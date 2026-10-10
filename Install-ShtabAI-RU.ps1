@@ -700,6 +700,7 @@ try {
     Show-Stage 6 'Настройка автозапуска, сети и запуск Ollama'
     Copy-Item -LiteralPath (Join-Path $package 'windows\Start-ShtabRuntime.ps1') -Destination $root
     Copy-Item -LiteralPath (Join-Path $package 'windows\Manage-ShtabAI.ps1') -Destination $root
+    Copy-Item -LiteralPath (Join-Path $package 'windows\Collect-ShtabDiagnostics.ps1') -Destination $root
     $manifest['ModelsPath'] = Join-Path $script:CacheDir 'qwen'
     $manifest['CacheDir'] = $script:CacheDir
     New-Item -ItemType Directory -Path $manifest.ModelsPath -Force | Out-Null

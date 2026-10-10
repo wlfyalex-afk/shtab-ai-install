@@ -28,6 +28,7 @@ certificate)
     echo "Public root certificate: /opt/shtab-ai-021/shtab-ai-root.crt"
     ;;
 diagnose) bash scripts/diagnose.sh ;;
+support) python3 scripts/support-report.py ;;
 logs) journalctl -u shtab-ai-install -n 100 --no-pager ;;
 resume) systemctl reset-failed shtab-ai-install; systemctl start --no-block shtab-ai-install ;;
 bootstrap)
@@ -46,5 +47,5 @@ stop) dc stop proxy web meeting-worker llm-worker brief-worker ollama ;;
 start)
     if ! grep -q '^SHTAB_OLLAMA_ENDPOINT=' .env; then dc up -d --wait --wait-timeout 240 ollama; fi
     dc up -d --wait --wait-timeout 240 web meeting-worker llm-worker brief-worker proxy ;;
-*) echo 'Commands: menu, backup, backups, restore, reset-db, uninstall, certificate, https-check, status, progress, diagnose, logs, resume, bootstrap, check, stop, start'; exit 2 ;;
+*) echo 'Commands: menu, backup, backups, restore, reset-db, uninstall, certificate, https-check, status, progress, diagnose, support, logs, resume, bootstrap, check, stop, start'; exit 2 ;;
 esac

@@ -31,7 +31,15 @@ function Receive-ShtabBootstrap {
     }
     return (Join-Path $Work 'windows/Install-WSL.ps1')
 }
+$transcribing=$false
+$log=''
 try {
+    $logDirectory=Join-Path $env:LOCALAPPDATA 'ShtabAI\Logs'
+    New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+    $log=Join-Path $logDirectory ('ShtabAI-install-'+(Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+[guid]::NewGuid().ToString('N')+'.log')
+    Start-Transcript -LiteralPath $log | Out-Null
+    $transcribing=$true
+    Write-Host ('Журнал установки: '+$log) -ForegroundColor Cyan
     Write-Host 'Установщик Штаб.AI запущен.' -ForegroundColor Cyan
     $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
     $principal=New-Object Security.Principal.WindowsPrincipal($identity)
@@ -75,4 +83,8 @@ try {
     if ($_.InvocationInfo.PositionMessage) { Write-Host $_.InvocationInfo.PositionMessage -ForegroundColor Yellow }
     if ($KeepWindowOpen) { [void](Read-Host 'Установка остановлена. Скопируйте ошибку выше; нажмите Enter, чтобы закрыть окно') }
     exit 1
+}
+finally {
+    if ($transcribing) { Stop-Transcript | Out-Null }
+    if ($log) { Write-Host ('Журнал установки: '+$log) -ForegroundColor Cyan }
 }
