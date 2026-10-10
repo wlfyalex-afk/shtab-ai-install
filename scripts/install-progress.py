@@ -71,7 +71,10 @@ def main():
             journal = command(['journalctl', '-u', 'shtab-ai-install', '-n', '40', '--no-pager', '-o', 'cat']) if status == 'BUILDING_APP' or not args.json else ''
             current = operation(status, journal)
             if args.json:
-                print(json.dumps(dict(status=status, progress=progress, operation=current), ensure_ascii=False))
+                # Windows PowerShell 5.1 decodes native pipes using the console
+                # code page. ASCII JSON transports Unicode losslessly on any
+                # code page; ConvertFrom-Json restores the original text.
+                print(json.dumps(dict(status=status, progress=progress, operation=current), ensure_ascii=True))
                 break
             lines = [render(status), '']
             if status in ('DOWNLOADING_QWEN', 'DOWNLOADING_WHISPER'):

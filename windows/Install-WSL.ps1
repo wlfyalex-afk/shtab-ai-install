@@ -11,6 +11,8 @@ param(
     [string]$CacheDir = ''
 )
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)
+$OutputEncoding = [Console]::OutputEncoding
 . (Join-Path $PSScriptRoot 'Install-Progress.ps1')
 . (Join-Path $PSScriptRoot 'Test-ShtabGPU.ps1')
 . (Join-Path $PSScriptRoot 'Download-Cache.ps1')
