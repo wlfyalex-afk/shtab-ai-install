@@ -1,8 +1,10 @@
 import contextlib
 import importlib.util
 import io
+import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -16,6 +18,19 @@ spec.loader.exec_module(progress)
 
 
 class InstallOperationTests(unittest.TestCase):
+    def test_json_preserves_russian_through_windows_console_code_pages(self):
+        with tempfile.TemporaryDirectory() as folder:
+            state = Path(folder) / 'status'
+            state.write_text('INSTALLING_DEPENDENCIES')
+            stream = io.StringIO()
+            with patch.object(sys, 'argv', ['install-progress.py', '--json', '--state-file', str(state)]), contextlib.redirect_stdout(stream):
+                progress.main()
+            raw = stream.getvalue().encode('ascii')
+            for codepage in ('cp866', 'cp1251', 'utf-8'):
+                data = json.loads(raw.decode(codepage))
+                self.assertEqual(data['operation']['title'], 'Установка зависимостей')
+                self.assertIn('Ubuntu', data['operation']['text'])
+
     def test_build_layer_bytes_and_percentage_then_package_install(self):
         layer = '#6 sha256:f9b274ee 18.32MB / 183.2MB 0.2s'
         data = operation('BUILDING_APP', layer)
