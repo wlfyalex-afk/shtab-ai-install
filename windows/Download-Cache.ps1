@@ -31,7 +31,7 @@
         }
         if (-not (Test-Path -LiteralPath $cached)) {
             $partial = $cached + '.partial'
-            Receive-File -Uri $Uri -OutFile $partial
+            Receive-File -Uri $Uri -OutFile $partial -Resume
             if ((Get-FileHash -LiteralPath $partial -Algorithm SHA256).Hash -ine $SHA256) {
                 Remove-Item -LiteralPath $partial -Force
                 throw 'Контрольная сумма загруженного файла не совпала.'

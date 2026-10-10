@@ -49,6 +49,9 @@ jobs:
       - name: Check persistent download cache
         shell: powershell
         run: .\tests\Test-DownloadCache.ps1
+      - name: Check interrupted archive download and resume
+        shell: powershell
+        run: .\tests\Test-DownloadResume.ps1
       - name: Check installation stages and model progress using Windows PowerShell 5.1
         shell: powershell
         run: .\tests\Test-InstallationProgress.ps1

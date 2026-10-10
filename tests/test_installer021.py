@@ -116,7 +116,7 @@ class InstallerTests(unittest.TestCase):
             api_calls = []
             class Api:
                 def model_info(self, repo, **kwargs):
-                    api_calls.append(repo)
+                    api_calls.append(kwargs.get('revision'))
                     return types.SimpleNamespace(sha='fixed-commit', siblings=[types.SimpleNamespace(rfilename='model.bin', size=5, lfs=types.SimpleNamespace(sha256=hashlib.sha256(b'model').hexdigest()))])
             def snapshot(**kw):
                 downloads.append(kw)
@@ -137,7 +137,7 @@ class InstallerTests(unittest.TestCase):
                 runpy.run_path(str(ROOT/'scripts/download-asr.py'))
                 (temp/'srv/shtab-ai/response-models/turbo/model.bin').write_bytes(b'wrong')
                 runpy.run_path(str(ROOT/'scripts/download-asr.py'))
-            self.assertEqual(len(api_calls),4)
+            self.assertEqual(api_calls, [None, 'fixed-commit', 'fixed-commit', 'fixed-commit'])
             self.assertEqual(len(downloads),3)
             self.assertEqual(downloads[0]['revision'],downloads[1]['revision'])
             self.assertEqual(len(loads),3)

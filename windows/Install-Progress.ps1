@@ -98,11 +98,15 @@ function Complete-Stages {
     Write-Progress -Id 1 -Activity 'Установка Штаб.AI' -Completed
 }
 
-function Receive-File([string]$Uri, [string]$OutFile) {
+function New-ShtabDownloadRequest([string]$Uri) {
+    return [Net.HttpWebRequest]::Create($Uri)
+}
+
+function Receive-File([string]$Uri, [string]$OutFile, [switch]$Resume) {
     if ([Uri]$Uri -and ([Uri]$Uri).Scheme -ne 'https') { throw 'Загрузка разрешена только по HTTPS.' }
     $name = Split-Path $OutFile -Leaf
     Write-Host ('Загружаем: ' + $name + '. Ожидаем ответ сервера...')
-    $request = [Net.HttpWebRequest]::Create($Uri)
+    $request = New-ShtabDownloadRequest $Uri
     $request.UserAgent = 'ShtabAI-Installer-RU'
     $request.Timeout = 60000
     $request.ReadWriteTimeout = 60000
@@ -110,13 +114,35 @@ function Receive-File([string]$Uri, [string]$OutFile) {
     $inputStream = $null
     $outputStream = $null
     $part = $OutFile + '.part'
+    $offset = [long]0
+    if ($Resume -and (Test-Path -LiteralPath $part)) {
+        $offset = (Get-Item -LiteralPath $part).Length
+        if ($offset -gt 0) {
+            Write-Host ('Докачка: ' + $name + ', сохранено ' + (Format-Size $offset)) -ForegroundColor Cyan
+            $request.AddRange($offset)
+        }
+    }
     try {
-        $response = $request.GetResponse()
+        try { $response = $request.GetResponse() } catch [Net.WebException] {
+            # The partial may already be complete, or this server rejects Range.
+            if ($offset -le 0 -or -not $_.Exception.Response -or [int]$_.Exception.Response.StatusCode -ne 416) { throw }
+            $_.Exception.Response.Close()
+            $offset = 0
+            $request = New-ShtabDownloadRequest $Uri
+            $request.UserAgent = 'ShtabAI-Installer-RU'
+            $request.Timeout = 60000
+            $request.ReadWriteTimeout = 60000
+            $response = $request.GetResponse()
+        }
+        if ([int]$response.StatusCode -eq 206) {
+            if ($offset -le 0 -or $response.Headers['Content-Range'] -notmatch ('^bytes ' + $offset + '-[0-9]+/[0-9]+$')) { throw 'Некорректный ответ сервера на докачку.' }
+        } else { $offset = 0 }
         $total = [long]$response.ContentLength
+        if ($total -ge 0) { $total += $offset }
         $inputStream = $response.GetResponseStream()
-        $outputStream = [IO.File]::Create($part)
+        $outputStream = [IO.File]::Open($part, $(if ($offset -gt 0) { 'Append' } else { 'Create' }), 'Write', 'None')
         $buffer = New-Object byte[] 1048576
-        $received = [long]0
+        $received = $offset
         $clock = [Diagnostics.Stopwatch]::StartNew()
         $lastUpdate = -1.0
         while (($read = $inputStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
@@ -124,7 +150,7 @@ function Receive-File([string]$Uri, [string]$OutFile) {
             $received += $read
             if ($clock.Elapsed.TotalSeconds - $lastUpdate -ge 1) {
                 $seconds = [Math]::Max(0.1, $clock.Elapsed.TotalSeconds)
-                $rate = $received / $seconds
+                $rate = ($received - $offset) / $seconds
                 $percent = -1
                 $remaining = -1
                 $eta = 'вычисляется'
@@ -155,7 +181,7 @@ function Receive-File([string]$Uri, [string]$OutFile) {
         if ($outputStream) { $outputStream.Dispose() }
         if ($inputStream) { $inputStream.Dispose() }
         if ($response) { $response.Close() }
-        if (Test-Path -LiteralPath $part) { Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue }
+        if (-not $Resume -and (Test-Path -LiteralPath $part)) { Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue }
         Write-Progress -Id 2 -Activity ('Загрузка: ' + $name) -Completed
     }
 }

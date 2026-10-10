@@ -34,9 +34,15 @@ def verify_model(path):
 
 root.mkdir(parents=True, exist_ok=True)
 download_marker = root / 'shtab-download.json'
-# Resolve the current upstream revision on each install. Immutable hashes validate
-# every cached file; a successful previous load alone is not an integrity check.
-info = HfApi().model_info(repo, files_metadata=True)
+# Keep the immutable upstream revision while an interrupted download resumes.
+# Fetch hashes from upstream again; cached metadata is not an integrity authority.
+pinned = None
+if download_marker.exists():
+    previous = json.loads(download_marker.read_text())
+    if previous.get('repository') == repo and previous.get('revision'):
+        pinned = previous['revision']
+        print('Whisper: докачка закреплённой версии ' + pinned, flush=True)
+info = HfApi().model_info(repo, files_metadata=True, **({'revision': pinned} if pinned else {}))
 revision = info.sha
 metadata = {'repository': repo, 'revision': revision, 'files': [
     {'name': item.rfilename, 'size': item.size, 'etag': (getattr(item.lfs, 'sha256', None) if item.lfs else item.blob_id)}
@@ -58,7 +64,9 @@ for item in metadata['files']:
             all_valid = False
             final.unlink()
             print('Файл изменился или повреждён — будет скачан заново.', flush=True)
-download_marker.write_text(json.dumps(metadata))
+temporary_marker = root / 'shtab-download.tmp'
+temporary_marker.write_text(json.dumps(metadata))
+os.replace(temporary_marker, download_marker)
 progress = Reporter('whisper')
 files = metadata.get('files', [])
 stop = threading.Event()
