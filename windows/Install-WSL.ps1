@@ -391,13 +391,11 @@ try {
     Invoke-Guest /bin/bash -c ('printf ''%s\n'' ' + (Quote-Shell $guestBackups) + ' > /opt/shtab-ai-021/backup-directory')
     $started = Get-Date
     $deadline = $started.AddHours(3)
-    $lastStatus = ''
     do {
         $snapshot = (Invoke-Guest /usr/bin/python3 /opt/shtab-ai-021/scripts/install-progress.py --json | Out-String) | ConvertFrom-Json
         $status = [string]$snapshot.status
         Show-AppStage $status
-        if ($status -in @('DOWNLOADING_QWEN','DOWNLOADING_WHISPER')) { Show-ModelProgress $snapshot.progress } else { Write-Progress -Id 3 -Activity 'Загрузка модели' -Completed }
-        if ($lastStatus -ne $status) { Invoke-Guest /opt/shtab-ai-021/shtabctl progress --once; $lastStatus=$status }
+        if ($status -in @('DOWNLOADING_QWEN','DOWNLOADING_WHISPER')) { Show-ModelProgress $snapshot.progress } else { Show-OperationProgress $snapshot.operation }
         if ($status -eq 'READY_FOR_ADMIN') { break }
         if ($status -like 'FAILED*' -or (Get-Date) -gt $deadline) {
             Invoke-Guest /bin/journalctl -u shtab-ai-install -n 80 --no-pager
@@ -405,6 +403,7 @@ try {
         }
         Start-Sleep -Seconds 10
     } while ($true)
+    Write-Progress -Id 3 -Activity 'Текущая операция' -Completed
     Show-Stage 15 'Настройка сертификата HTTPS'
     Invoke-Guest /opt/shtab-ai-021/shtabctl certificate
     $cert = Join-Path $root 'shtab-ai-root.crt'

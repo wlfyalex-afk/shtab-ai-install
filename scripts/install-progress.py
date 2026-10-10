@@ -7,6 +7,7 @@ import sys
 import time
 import json
 from model_progress import read_progress, describe
+from install_operation import operation
 
 STAGES = [
     ('INSTALLING_DEPENDENCIES', 'Установка зависимостей'),
@@ -42,6 +43,18 @@ def command(args):
     except (OSError, subprocess.TimeoutExpired) as exc:
         return str(exc)
 
+
+def display(text, live=False):
+    if live:
+        # Repaint the same reserved lines; do not clear the whole terminal or
+        # append another screen on each poll. Clip to prevent line wrapping.
+        import shutil
+        width = max(20, shutil.get_terminal_size().columns - 1)
+        lines = text.splitlines()
+        print('\033[H' + '\n'.join('\033[2K' + line[:width] for line in lines) + '\033[J', end='', flush=True)
+    else:
+        print(text, flush=True)
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--once', action='store_true', help='Показать один раз')
@@ -55,19 +68,21 @@ def main():
             except FileNotFoundError:
                 status = ''
             progress = read_progress(pathlib.Path(args.state_file).parent, status)
+            journal = command(['journalctl', '-u', 'shtab-ai-install', '-n', '40', '--no-pager', '-o', 'cat']) if status == 'BUILDING_APP' or not args.json else ''
+            current = operation(status, journal)
             if args.json:
-                print(json.dumps(dict(status=status, progress=progress), ensure_ascii=False))
+                print(json.dumps(dict(status=status, progress=progress, operation=current), ensure_ascii=False))
                 break
-            if sys.stdout.isatty() and not args.once:
-                print('\033[2J\033[H', end='')
-            print(render(status))
+            lines = [render(status), '']
             if status in ('DOWNLOADING_QWEN', 'DOWNLOADING_WHISPER'):
-                print('\n' + describe(progress))
-            print('\nСлужба:')
-            print(command(['systemctl', 'show', 'shtab-ai-install.service', '-p', 'ActiveState', '-p', 'SubState', '-p', 'Result']))
-            print('\nПоследние сообщения:')
-            print(command(['journalctl', '-u', 'shtab-ai-install', '-n', '5', '--no-pager', '-o', 'cat']))
-            print('\nCtrl+C — закрыть экран; установка продолжится.', flush=True)
+                lines.append(describe(progress))
+            elif current:
+                lines.extend([current['title'], current['text']])
+            if args.once or status.startswith('FAILED'):
+                lines.extend(['', 'Служба:', command(['systemctl', 'show', 'shtab-ai-install.service', '-p', 'ActiveState', '-p', 'SubState', '-p', 'Result']),
+                              '', 'Последние сообщения:', '\n'.join(journal.splitlines()[-5:])])
+            lines.extend(['', 'Ctrl+C — закрыть экран; установка продолжится.'])
+            display('\n'.join(lines), live=sys.stdout.isatty() and not args.once)
             if args.once or status == 'READY_FOR_ADMIN' or status.startswith('FAILED'):
                 break
             time.sleep(3)

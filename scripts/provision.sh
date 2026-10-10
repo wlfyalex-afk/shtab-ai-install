@@ -52,7 +52,7 @@ EOF
 fi
 dc config --quiet
 stage BUILDING_APP
-dc build web
+BUILDKIT_PROGRESS=plain dc build web
 stage INITIALIZING_DATABASE
 dc run --rm --no-deps init-volumes
 dc up -d --wait --wait-timeout 240 db
