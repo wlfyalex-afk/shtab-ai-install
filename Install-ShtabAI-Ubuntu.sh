@@ -79,15 +79,9 @@ cd "${roots[0]}"
 sha256sum --quiet -c SHA256SUMS
 python3 scripts/configure-storage.py prepare "$install_dir"
 SHTAB_ACCESS="$access" SHTAB_LAN_ADDRESS="$host" SHTAB_LAN_SUBNET="$subnet" bash install.sh "$host" "$mode"
-deadline=$((SECONDS+10800))
-while true; do
-    status=$(cat /var/lib/shtab-ai-021/status 2>/dev/null || echo STARTING)
-    /opt/shtab-ai-021/shtabctl progress --once
-    [[ $status != FAILED* ]] || { journalctl -u shtab-ai-install -n 80 --no-pager; exit 1; }
-    [[ $status != READY_FOR_ADMIN ]] || break
-    (( SECONDS < deadline )) || { echo 'Ожидание истекло; проверьте журнал установки.'; exit 1; }
-    sleep 10
-done
+/opt/shtab-ai-021/shtabctl progress --timeout 10800
+status=$(cat /var/lib/shtab-ai-021/status 2>/dev/null || echo STARTING)
+[[ $status == READY_FOR_ADMIN ]] || { echo 'Установка не завершена. Для диагностики: sudo /opt/shtab-ai-021/shtabctl logs'; exit 1; }
 /opt/shtab-ai-021/shtabctl certificate
 certificate=/usr/local/share/ca-certificates/shtab-ai-021.crt
 [[ ! -e $certificate ]] || { echo 'Сертификат с таким именем уже существует; остановлено без перезаписи.'; exit 1; }

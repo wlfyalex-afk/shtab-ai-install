@@ -23,7 +23,7 @@ def render(status):
     if status == 'READY_FOR_ADMIN':
         count, title = len(STAGES), 'Компоненты готовы — можно создать администратора'
     elif status.startswith('FAILED'):
-        return f'Установка остановилась: {status}\nПодробности — в журнале ниже.'
+        return f'Установка остановилась: {status}'
     else:
         match = next(((i, title) for i, (key, title) in enumerate(STAGES) if key == status), None)
         if match is None:
@@ -34,7 +34,7 @@ def render(status):
     bar = '█' * filled + '░' * (28 - filled)
     return (f'Штаб.AI — установка\n[{bar}] {percent}% этапов завершено ({count}/{len(STAGES)})\n'
             f'Текущий этап: {title}\n'
-            'Этапы имеют разную длительность; процент не является оценкой оставшегося времени.')
+            'Процент — завершённые этапы, не оставшееся время.')
 
 def command(args):
     try:
@@ -42,6 +42,14 @@ def command(args):
         return (result.stdout or result.stderr).strip()
     except (OSError, subprocess.TimeoutExpired) as exc:
         return str(exc)
+
+
+def current_journal():
+    invocation = command(['systemctl', 'show', 'shtab-ai-install.service', '-p', 'InvocationID', '--value'])
+    if len(invocation) != 32 or any(c not in '0123456789abcdef' for c in invocation):
+        return ''
+    return command(['journalctl', '_SYSTEMD_INVOCATION_ID=' + invocation,
+                    '-n', '40', '--no-pager', '-o', 'cat'])
 
 
 def display(text, live=False):
@@ -59,8 +67,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--once', action='store_true', help='Показать один раз')
     parser.add_argument('--json', action='store_true', help='Статус и сведения о модели в JSON')
+    parser.add_argument('--timeout', type=int, default=0, help='Предельное время ожидания в секундах')
     parser.add_argument('--state-file', default='/var/lib/shtab-ai-021/status')
     args = parser.parse_args()
+    live = sys.stdout.isatty() and not args.once and not args.json
+    started = time.monotonic()
+    previous = None
+    final_text = ''
+    if live:
+        print('\033[?1049h\033[?25l', end='', flush=True)
     try:
         while True:
             try:
@@ -68,7 +83,7 @@ def main():
             except FileNotFoundError:
                 status = ''
             progress = read_progress(pathlib.Path(args.state_file).parent, status)
-            journal = command(['journalctl', '-u', 'shtab-ai-install', '-n', '40', '--no-pager', '-o', 'cat']) if status == 'BUILDING_APP' or not args.json else ''
+            journal = current_journal() if status == 'BUILDING_APP' or status.startswith('FAILED') else ''
             current = operation(status, journal)
             if args.json:
                 # Windows PowerShell 5.1 decodes native pipes using the console
@@ -76,21 +91,31 @@ def main():
                 # code page; ConvertFrom-Json restores the original text.
                 print(json.dumps(dict(status=status, progress=progress, operation=current), ensure_ascii=True))
                 break
-            lines = [render(status), '']
+            lines = [render(status)]
             if status in ('DOWNLOADING_QWEN', 'DOWNLOADING_WHISPER'):
                 lines.append(describe(progress))
             elif current:
-                lines.extend([current['title'], current['text']])
-            if args.once or status.startswith('FAILED'):
+                lines.append(current['text'])
+            if status.startswith('FAILED'):
                 lines.extend(['', 'Служба:', command(['systemctl', 'show', 'shtab-ai-install.service', '-p', 'ActiveState', '-p', 'SubState', '-p', 'Result']),
                               '', 'Последние сообщения:', '\n'.join(journal.splitlines()[-5:])])
-            lines.extend(['', 'Ctrl+C — закрыть экран; установка продолжится.'])
-            display('\n'.join(lines), live=sys.stdout.isatty() and not args.once)
+            lines.extend(['', 'Ctrl+C — закрыть просмотр; установка работает отдельно.'])
+            final_text = '\n'.join(lines)
+            if live or final_text != previous:
+                display(final_text, live=live)
+                previous = final_text
             if args.once or status == 'READY_FOR_ADMIN' or status.startswith('FAILED'):
                 break
+            if args.timeout and time.monotonic() - started >= args.timeout:
+                raise SystemExit('Время ожидания истекло. Проверьте статус установки.')
             time.sleep(3)
     except KeyboardInterrupt:
-        print('\nПросмотр закрыт. Установка продолжает работать в фоне.')
+        final_text = 'Просмотр закрыт. Служба установки работает отдельно; проверьте её статус.'
+    finally:
+        if live:
+            print('\033[?25h\033[?1049l', end='', flush=True)
+            if final_text:
+                print(final_text, flush=True)
 
 if __name__ == '__main__':
     main()
