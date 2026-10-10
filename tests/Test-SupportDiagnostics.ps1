@@ -31,5 +31,7 @@ try {
     if ($LASTEXITCODE -ne 1) { throw 'Expected failed bootstrap exit code.' }
     $logs=@(Get-ChildItem (Join-Path $fixture 'ShtabAI/Logs') -Filter 'ShtabAI-bootstrap-*.log')
     if ($logs.Count -ne 1 -or (Get-Content $logs[0].FullName -Raw) -notmatch 'fixture-download-failed') { throw 'CMD did not log an early download failure.' }
+    # The failed child is expected; do not return its exit code to the CI shell.
+    $global:LASTEXITCODE=0
     Write-Host 'Diagnostic output, timeout and CMD failure logging tests passed.'
 } finally { Remove-Item -LiteralPath $fixture -Recurse -Force }

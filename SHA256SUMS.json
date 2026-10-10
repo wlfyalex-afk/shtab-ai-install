@@ -371,7 +371,7 @@
   "tests/Test-InstallationProgress.ps1": "475dc65bd5a0f8841e8ce207f6d29a270655e8d3abb59a728566d872a85b8ef1",
   "tests/Test-MemoryLimits.ps1": "35562acd45f259102f2b4452ff4dea0bf6eead75f2465088f3dfce98fa363ca7",
   "tests/Test-RuntimeNetwork.ps1": "edb9ea1f5fc20b52fa7c4f2999007c2f66d5caf659868d1edb8495e72c7e7ffc",
-  "tests/Test-SupportDiagnostics.ps1": "01c3358f628fe5fa8770a18b3a2677dcff1af0817619734fa2334ec0f7530824",
+  "tests/Test-SupportDiagnostics.ps1": "7e4f04758ed63f5a4b8c0ce550145ce68f31006f1e93513850f71984fce73bb9",
   "tests/Test-VirtualizationPreflight.ps1": "298fcad3fb9935b4ef77b796c605bb616fbaba8a68a0a52ade8bb2a2be8ca662",
   "tests/Test-WSLProbe.ps1": "f5c78968c29379f5846a8b0f2263e6c5cb941a862b1d2bc24e5296299883b372",
   "tests/Test-WSLRuntimeInstall.ps1": "4eefd473349b49de18316f6df8c7fcb5a3597344ec1aa87bba1a7ef85484da84",
