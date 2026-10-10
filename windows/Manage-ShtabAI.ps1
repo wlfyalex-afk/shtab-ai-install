@@ -38,6 +38,7 @@ while ($true) {
     Write-Host '5 — Журнал Ollama'
     Write-Host '6 — Адрес в сети и публичный сертификат'
     Write-Host '7 — Открыть папку резервных копий'
+    Write-Host '8 — Сохранить диагностику для поддержки'
     Write-Host '0 — Выход'
     $choice=Read-Host 'Выберите пункт'
     switch ($choice) {
@@ -66,6 +67,10 @@ while ($true) {
             Write-Host 'На другом компьютере Windows добавьте сертификат в доверенные корневые центры сертификации текущего пользователя.'
         }
         '7' { Start-Process explorer.exe -ArgumentList ('"'+$manifest.BackupPath+'"') }
+        '8' {
+            try { & (Join-Path $PSScriptRoot 'Collect-ShtabDiagnostics.ps1') -ManifestPath $ManifestPath }
+            catch { Write-Host ('Не удалось сохранить диагностику: '+$_.Exception.Message) -ForegroundColor Red }
+        }
         default { Write-Host 'Некорректный выбор.' }
     }
     [void](Read-Host 'Нажмите Enter')

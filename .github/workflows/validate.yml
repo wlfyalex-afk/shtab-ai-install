@@ -43,6 +43,9 @@ jobs:
       - name: Check complete bootstrap download using Windows PowerShell 5.1
         shell: powershell
         run: .\tests\Test-BootstrapDownload.ps1
+      - name: Check CMD logging and support diagnostics
+        shell: powershell
+        run: .\tests\Test-SupportDiagnostics.ps1
       - name: Check persistent download cache
         shell: powershell
         run: .\tests\Test-DownloadCache.ps1
