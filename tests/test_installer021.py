@@ -122,7 +122,7 @@ class InstallerTests(unittest.TestCase):
                 downloads.append(kw)
                 if len(downloads) == 1:
                     raise RuntimeError('network interrupted')
-                (Path(kw['local_dir'])/'model.bin').write_bytes(b'model')
+                (type(temp)(kw['local_dir'])/'model.bin').write_bytes(b'model')
                 return kw['local_dir']
             def model(*a, **kw):
                 loads.append((a,kw))
