@@ -1,7 +1,7 @@
 <section class="meeting-player cassette-player" aria-label="Проигрыватель записи совещания">
   <audio id="meeting-audio" preload="metadata" src="{{ url_for('meeting_review.audio',mid=row.id if row is defined else meeting.id) }}"></audio>
   <div class="cassette-face">
-    <div class="cassette-brand"><strong>BIM-DV</strong><span>MEETING DECK · ШТАБ.AI</span></div>
+    <div class="cassette-brand"><strong>Штаб.AI</strong><span>MEETING DECK · ШТАБ.AI</span></div>
     <div class="cassette-window" aria-hidden="true"><i></i><b></b><i></i></div>
     <output id="audio-clock" class="audio-clock" aria-label="Время записи">00:00 / --:--</output>
   </div>

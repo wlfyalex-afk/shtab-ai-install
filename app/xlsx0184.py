@@ -24,7 +24,7 @@ def workbook_bytes(sheets, created_at=None):
     output = io.BytesIO()
     workbook = xlsxwriter.Workbook(output, {"in_memory": True})
     workbook.set_properties({
-        "title": "Отчёт Штаб.AI", "author": "Штаб.AI", "company": "БИМ-ДВ",
+        "title": "Отчёт Штаб.AI", "author": "Штаб.AI", "company": "Штаб.AI",
         "created": _created_text(created_at),
     })
     title_format = workbook.add_format({

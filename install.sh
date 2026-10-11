@@ -19,7 +19,7 @@ if [[ $install_state == active || $install_state == activating ]]; then
     echo 'Installation already running; sudo journalctl -fu shtab-ai-install'; exit 0
 fi
 src=$(cd "$(dirname "$0")" && pwd)
-[[ -s "$src/app/static/bim-dv.jpg" ]] || { echo 'Missing logo: app/static/bim-dv.jpg'; exit 1; }
+[[ -s "$src/app/static/author-avatar.jpg" ]] || { echo 'Missing logo: app/static/author-avatar.jpg'; exit 1; }
 for font in DejaVuSans.ttf DejaVuSans-Bold.ttf; do
     [[ -s "$src/app/vendor0184/$font" ]] || { echo "Missing PDF font: $font"; exit 1; }
 done
