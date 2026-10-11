@@ -131,15 +131,9 @@ systemctl start --no-block "$unit"
     mode=$(cat /opt/shtab-ai-021/acceleration)
     access=$(cat /opt/shtab-ai-021/access-mode 2>/dev/null || echo local)
 fi
-deadline=$((SECONDS+10800))
-while true; do
-    status=$(cat /var/lib/shtab-ai-021/status 2>/dev/null || echo STARTING)
-    /opt/shtab-ai-021/shtabctl progress --once
-    [[ $status != FAILED* ]] || { journalctl -u shtab-ai-install -n 80 --no-pager; exit 1; }
-    [[ $status != READY_FOR_ADMIN ]] || break
-    (( SECONDS < deadline )) || { echo 'Ожидание истекло; проверьте журнал установки.'; exit 1; }
-    sleep 10
-done
+/opt/shtab-ai-021/shtabctl progress --timeout 10800
+status=$(cat /var/lib/shtab-ai-021/status 2>/dev/null || echo STARTING)
+[[ $status == READY_FOR_ADMIN ]] || { echo 'Установка не завершена. Для диагностики: sudo /opt/shtab-ai-021/shtabctl logs'; exit 1; }
 /opt/shtab-ai-021/shtabctl certificate
 certificate=/usr/local/share/ca-certificates/shtab-ai-021.crt
 [[ ! -e $certificate ]] || cmp -s "$certificate" /opt/shtab-ai-021/shtab-ai-root.crt || { echo 'Другой сертификат с таким именем уже существует; остановлено без перезаписи.'; exit 1; }

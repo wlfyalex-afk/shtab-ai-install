@@ -18,6 +18,27 @@ spec.loader.exec_module(progress)
 
 
 class InstallOperationTests(unittest.TestCase):
+    def test_journal_is_scoped_to_current_invocation(self):
+        invocation = 'a' * 32
+        with patch.object(progress, 'command', side_effect=[invocation, 'current attempt']) as run:
+            self.assertEqual(progress.current_journal(), 'current attempt')
+        self.assertIn('_SYSTEMD_INVOCATION_ID=' + invocation, run.call_args.args[0])
+        with patch.object(progress, 'command', return_value='') as run:
+            self.assertEqual(progress.current_journal(), '')
+            self.assertEqual(run.call_count, 1)
+
+    def test_normal_snapshot_omits_service_diagnostics_and_old_errors(self):
+        with tempfile.TemporaryDirectory() as folder:
+            state = Path(folder) / 'status'
+            state.write_text('INSTALLING_DEPENDENCIES')
+            stream = io.StringIO()
+            with patch.object(sys, 'argv', ['install-progress.py', '--once', '--state-file', str(state)]), contextlib.redirect_stdout(stream), patch.object(progress, 'command') as run:
+                progress.main()
+            run.assert_not_called()
+            self.assertIn('Устанавливаем Docker', stream.getvalue())
+            self.assertNotIn('Последние сообщения', stream.getvalue())
+            self.assertLessEqual(len(stream.getvalue().splitlines()), 7)
+
     def test_json_preserves_russian_through_windows_console_code_pages(self):
         with tempfile.TemporaryDirectory() as folder:
             state = Path(folder) / 'status'
