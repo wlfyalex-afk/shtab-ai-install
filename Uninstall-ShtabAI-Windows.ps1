@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.1
 [CmdletBinding()]
-param([ValidatePattern('^ShtabAI-[A-Za-z0-9-]+$')][string]$DistroName,[switch]$ListOnly,[switch]$KeepWindowOpen)
+param([ValidatePattern('^ShtabAI(?:-[A-Za-z0-9-]+)?$')][string]$DistroName,[switch]$ListOnly,[switch]$KeepWindowOpen)
 $ErrorActionPreference='Stop'
 function Remove-ShtabShortcuts($Manifest,[string]$Root) {
     $distro = [string]$Manifest.DistroName
@@ -56,16 +56,16 @@ try {
     if (Test-Path $base) {
         foreach ($folder in Get-ChildItem $base -Directory) {
             $file=Join-Path $folder.FullName 'installation.json'
-            if ((Test-Path $file) -and $folder.Name -match '^ShtabAI-[A-Za-z0-9-]+$') {
+            if ((Test-Path $file) -and $folder.Name -match '^ShtabAI(?:-[A-Za-z0-9-]+)?$') {
                 $record=Get-Content $file -Raw | ConvertFrom-Json
                 if ($record.Product -eq 'ShtabAI' -and $record.Backend -eq 'WSL2' -and $record.DistroName -eq $folder.Name) {
                     $candidates+=[pscustomobject]@{Number=$candidates.Count+1; Name=$folder.Name; Root=$folder.FullName; Acceleration=$record.Acceleration}
                 }
             }
         }
-        foreach ($index in Get-ChildItem $base -File -Filter 'ShtabAI-*.json') {
+        foreach ($index in Get-ChildItem $base -File -Filter 'ShtabAI*.json') {
             $record=Get-Content $index.FullName -Raw | ConvertFrom-Json
-            if ($record.Product -eq 'ShtabAI' -and $record.Backend -eq 'WSL2' -and $record.DistroName -match '^ShtabAI-[A-Za-z0-9-]+$' -and $index.BaseName -eq $record.DistroName) {
+            if ($record.Product -eq 'ShtabAI' -and $record.Backend -eq 'WSL2' -and $record.DistroName -match '^ShtabAI(?:-[A-Za-z0-9-]+)?$' -and $index.BaseName -eq $record.DistroName) {
                 $file=Join-Path $record.Root 'installation.json'
                 if (-not (Test-Path $file)) { throw ('Установка недоступна: '+$record.Root+'. Подключите диск установки и повторите попытку.') }
                 $actual=Get-Content $file -Raw | ConvertFrom-Json

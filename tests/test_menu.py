@@ -19,7 +19,7 @@ class MenuTests(unittest.TestCase):
         self.ctl = self.base/'ctl'
         self.ctl.write_text('#!/bin/bash\nif [[ $1 == backups ]]; then printf "%s\\n" "$COPY"; else printf "%s|%s\\n" "$1" "${2:-}" >> "$CALLS"; fi\n')
         self.ctl.chmod(0o755)
-        self.menu = (ROOT/'scripts/menu.sh').read_text().replace('ctl=/opt/shtab-ai-021/shtabctl', f'ctl="{self.ctl}"')
+        self.menu = (ROOT/'scripts/menu.sh').read_text().replace('ctl=/opt/shtab-ai/shtabctl', f'ctl="{self.ctl}"')
 
     def tearDown(self): self.temp.cleanup()
 
@@ -35,7 +35,7 @@ class MenuTests(unittest.TestCase):
             self.calls.unlink()
 
     def test_cancel_and_invalid_selection_never_restore(self):
-        for selection in ('0', '', '9999999999999999999', '/opt/shtab-ai-021', 'abc'):
+        for selection in ('0', '', '9999999999999999999', '/opt/shtab-ai', 'abc'):
             self.run_menu('7\n'+selection+'\n0\n')
             self.assertFalse(self.calls.exists())
 
@@ -47,7 +47,7 @@ class MenuTests(unittest.TestCase):
         (self.base/'.env').write_text('SHTAB_HTTPS_HOST=192.168.10.134\nSHTAB_HTTPS_BIND_IP=0.0.0.0\n')
         ca = self.base/'tls-data/caddy/pki/authorities/local/root.crt'
         ca.parent.mkdir(parents=True); ca.write_text('mock CA')
-        script = (ROOT/'scripts/check-https.sh').read_text().replace('cd /opt/shtab-ai-021', f'cd "{self.base}"')
+        script = (ROOT/'scripts/check-https.sh').read_text().replace('cd /opt/shtab-ai', f'cd "{self.base}"')
         def stub(name, body):
             path = scripts/name; path.write_text('#!/bin/bash\n'+body+'\n'); path.chmod(0o755)
         stub('sleep', 'exit 0'); stub('openssl', 'exit 0')

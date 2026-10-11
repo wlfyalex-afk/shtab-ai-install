@@ -10,15 +10,15 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     exit
 }
 $manifest=Get-Content $ManifestPath -Raw | ConvertFrom-Json
-if ($manifest.Product -ne 'ShtabAI' -or $manifest.DistroName -notmatch '^ShtabAI-[A-Za-z0-9-]+$') { throw 'Некорректная установка.' }
+if ($manifest.Product -ne 'ShtabAI' -or $manifest.DistroName -notmatch '^ShtabAI(?:-[A-Za-z0-9-]+)?$') { throw 'Некорректная установка.' }
 $wsl=Join-Path $env:SystemRoot 'System32\wsl.exe'
 function Sync-Certificate {
-    & $wsl --distribution $manifest.DistroName --user root --exec /opt/shtab-ai-021/shtabctl certificate
+    & $wsl --distribution $manifest.DistroName --user root --exec /opt/shtab-ai/shtabctl certificate
     if ($LASTEXITCODE -ne 0) { throw 'Не удалось экспортировать сертификат.' }
     $cert=Join-Path $manifest.Root 'shtab-ai-root.crt'
     $guestPath=((& $wsl --distribution $manifest.DistroName --user root --exec wslpath -u $cert) | Out-String).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'Не удалось определить путь сертификата.' }
-    & $wsl --distribution $manifest.DistroName --user root --exec /bin/cp /opt/shtab-ai-021/shtab-ai-root.crt $guestPath
+    & $wsl --distribution $manifest.DistroName --user root --exec /bin/cp /opt/shtab-ai/shtab-ai-root.crt $guestPath
     if ($LASTEXITCODE -ne 0) { throw 'Не удалось скопировать сертификат.' }
     $imported=Import-Certificate -FilePath $cert -CertStoreLocation Cert:\CurrentUser\Root
     $manifest=Get-Content $ManifestPath -Raw | ConvertFrom-Json
@@ -45,16 +45,16 @@ while ($true) {
         '0' { exit }
         '1' { Start-Process ("https://localhost:$($manifest.HTTPSPort)/login") }
         '2' {
-            & $wsl --distribution $manifest.DistroName --user root --exec /opt/shtab-ai-021/shtabctl menu
+            & $wsl --distribution $manifest.DistroName --user root --exec /opt/shtab-ai/shtabctl menu
             try { Sync-Certificate } catch { Write-Host $_.Exception.Message -ForegroundColor Yellow }
         }
         '3' {
             Start-ScheduledTask -TaskName $manifest.TaskName
             Start-Sleep -Seconds 3
-            & $wsl --distribution $manifest.DistroName --user root --exec /opt/shtab-ai-021/shtabctl start
+            & $wsl --distribution $manifest.DistroName --user root --exec /opt/shtab-ai/shtabctl start
         }
         '4' {
-            & $wsl --distribution $manifest.DistroName --user root --exec /opt/shtab-ai-021/shtabctl stop
+            & $wsl --distribution $manifest.DistroName --user root --exec /opt/shtab-ai/shtabctl stop
             Stop-ScheduledTask -TaskName $manifest.TaskName
             $prefix=(Join-Path $manifest.Root 'ollama')+'\'
             Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }

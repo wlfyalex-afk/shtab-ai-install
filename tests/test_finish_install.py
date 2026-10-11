@@ -37,8 +37,8 @@ class FinishTests(unittest.TestCase):
             (app / 'scripts/create-desktop-shortcut.py').write_text(
                 'import os\nwith open(os.environ["CALLS"], "a") as f: f.write("shortcut\\n")\n')
             script = (ROOT / 'scripts/finish-install.sh').read_text()
-            script = script.replace('/opt/shtab-ai-021', str(app)).replace('/var/lib/shtab-ai-021', str(state))
-            script = script.replace('/usr/local/share/ca-certificates/shtab-ai-021.crt', str(certificate))
+            script = script.replace('/opt/shtab-ai', str(app)).replace('/var/lib/shtab-ai', str(state))
+            script = script.replace('/usr/local/share/ca-certificates/shtab-ai.crt', str(certificate))
             script = script.replace('[[ $EUID -eq 0 ]]', '[[ 1 -eq 1 ]]')
             env = dict(os.environ, PATH=str(bin_dir)+':'+os.environ['PATH'], CALLS=str(base/'calls'),
                        COUNT=count, HTTPS_CODE=str(https_code), BOOTSTRAP_CODE=str(bootstrap_code))
@@ -59,26 +59,26 @@ class FinishTests(unittest.TestCase):
         code, calls, cert = self.run_finish()
         self.assertEqual(code, 0)
         self.assertEqual(cert, 'our-ca')
-        self.assertLess(calls.index('trust'), calls.index('bootstrap021.py'))
-        self.assertLess(calls.index('bootstrap021.py'), calls.index('shortcut'))
+        self.assertLess(calls.index('trust'), calls.index('bootstrap.py'))
+        self.assertLess(calls.index('bootstrap.py'), calls.index('shortcut'))
 
     def test_wait_continues_from_provisioning_to_setup(self):
         code, calls, _ = self.run_finish(status='DOWNLOADING_WHISPER', wait=True)
         self.assertEqual(code, 0)
         self.assertLess(calls.index('progress --timeout 10800'), calls.index('https'))
-        self.assertIn('bootstrap021.py', calls)
+        self.assertIn('bootstrap.py', calls)
 
     def test_existing_admin_is_preserved(self):
         code, calls, _ = self.run_finish(count='1', interactive=False)
         self.assertEqual(code, 0)
-        self.assertNotIn('bootstrap021.py', calls)
+        self.assertNotIn('bootstrap.py', calls)
         self.assertIn('shortcut', calls)
 
     def test_failed_https_does_not_create_user_or_trust_ca(self):
         code, calls, cert = self.run_finish(https_code=1)
         self.assertNotEqual(code, 0)
         self.assertNotIn('trust', calls)
-        self.assertNotIn('bootstrap021.py', calls)
+        self.assertNotIn('bootstrap.py', calls)
         self.assertIsNone(cert)
 
     def test_not_ready_does_not_modify_system(self):
@@ -92,12 +92,12 @@ class FinishTests(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertEqual(cert, 'foreign-ca')
         self.assertNotIn('trust', calls)
-        self.assertNotIn('bootstrap021.py', calls)
+        self.assertNotIn('bootstrap.py', calls)
 
     def test_no_terminal_requires_interactive_completion(self):
         code, calls, _ = self.run_finish(interactive=False)
         self.assertNotEqual(code, 0)
-        self.assertNotIn('bootstrap021.py', calls)
+        self.assertNotIn('bootstrap.py', calls)
         self.assertNotIn('shortcut', calls)
 
     def test_bootstrap_error_never_reports_completion(self):
@@ -111,7 +111,7 @@ class FinishTests(unittest.TestCase):
             (app/'scripts').mkdir()
             for name in ('resume-install.sh', 'finish-install.sh'):
                 (app/'scripts'/name).write_text(f'echo {name} "$@"\n')
-            script = (ROOT/'shtabctl').read_text().replace('/opt/shtab-ai-021', str(app))
+            script = (ROOT/'shtabctl').read_text().replace('/opt/shtab-ai', str(app))
             script = script.replace('[[ $EUID -eq 0 ]]', '[[ 1 -eq 1 ]]')
             result = subprocess.run(['bash', '-c', script, 'shtabctl', 'resume'], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0)

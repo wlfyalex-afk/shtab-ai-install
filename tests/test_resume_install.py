@@ -31,8 +31,8 @@ class ResumeTests(unittest.TestCase):
             command.chmod(0o755)
             script = (ROOT / 'scripts/resume-install.sh').read_text()
             script = script.replace('[[ $EUID -eq 0 ]]', '[[ 1 -eq 1 ]]')
-            script = script.replace('/opt/shtab-ai-021', str(app))
-            script = script.replace('/var/lib/shtab-ai-021', str(state))
+            script = script.replace('/opt/shtab-ai', str(app))
+            script = script.replace('/var/lib/shtab-ai', str(state))
             before = {str(p): p.read_bytes() for p in app.rglob('*') if p.is_file()}
             result = subprocess.run(['bash', '-c', script], capture_output=True, text=True,
                                     env=dict(os.environ, PATH=str(bin_dir)+':'+os.environ['PATH'],

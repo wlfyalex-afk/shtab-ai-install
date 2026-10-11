@@ -14,7 +14,7 @@ class StorageTests(unittest.TestCase):
         spec=importlib.util.spec_from_file_location('storage', SCRIPT)
         self.m=importlib.util.module_from_spec(spec); spec.loader.exec_module(self.m)
         self.temp=tempfile.TemporaryDirectory(); self.base=Path(self.temp.name)
-        self.m.CANONICAL=self.base/'opt/shtab-ai-021'; self.m.CANONICAL.parent.mkdir()
+        self.m.CANONICAL=self.base/'opt/shtab-ai'; self.m.CANONICAL.parent.mkdir()
         self.m.UNITS=self.base/'units'; self.m.UNITS.mkdir()
 
     def tearDown(self): self.temp.cleanup()
@@ -22,11 +22,11 @@ class StorageTests(unittest.TestCase):
     def test_reject_unsafe_paths(self):
         for value in ('/', '/mnt', 'relative/path', '/mnt/a b/app', '/mnt/../data/app', '/mnt/a\napp', str(self.m.CANONICAL/'nested')):
             with self.assertRaises(ValueError): self.m.validate_path(value)
-        self.assertEqual(self.m.validate_path('/mnt/data/shtab-ai-021'),Path('/mnt/data/shtab-ai-021'))
+        self.assertEqual(self.m.validate_path('/mnt/data/shtab-ai'),Path('/mnt/data/shtab-ai'))
 
     def prepare(self, selected, fs=None):
         fs=fs or {'fstype':'ext4','target':'/','uuid':'test-disk'}
-        with patch.object(self.m,'filesystem',return_value=fs), patch.object(self.m.shutil,'disk_usage',return_value=SimpleNamespace(free=64*1024**3)), patch.object(self.m.subprocess,'check_output',return_value='opt-shtab\\x2dai\\x2d021.mount\n'), patch.object(self.m.subprocess,'run') as run:
+        with patch.object(self.m,'filesystem',return_value=fs), patch.object(self.m.shutil,'disk_usage',return_value=SimpleNamespace(free=64*1024**3)), patch.object(self.m.subprocess,'check_output',return_value='opt-shtab\\x2dai.mount\n'), patch.object(self.m.subprocess,'run') as run:
             self.m.prepare(str(selected))
         return run
 
@@ -37,7 +37,7 @@ class StorageTests(unittest.TestCase):
             self.assertEqual(config['volumes'][name]['driver_opts']['device'],str(self.m.CANONICAL/'storage'/name))
             self.assertTrue((self.m.CANONICAL/'storage'/name).is_dir())
         self.assertFalse((self.m.CANONICAL/'installation-created').exists())
-        self.assertEqual((self.m.CANONICAL/'backup-directory').read_text().strip(),'/var/backups/shtab-ai-021')
+        self.assertEqual((self.m.CANONICAL/'backup-directory').read_text().strip(),'/var/backups/shtab-ai')
 
     def test_custom_root_has_persistent_bind_unit_and_separate_backups(self):
         selected=self.base/'other-disk/app'

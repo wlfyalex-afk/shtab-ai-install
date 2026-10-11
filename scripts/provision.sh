@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
-cd /opt/shtab-ai-021
-state=/var/lib/shtab-ai-021
+cd /opt/shtab-ai
+state=/var/lib/shtab-ai
 mkdir -p "$state"
 exec 9>"$state/install.lock"
 flock -n 9 || { echo 'Installation already running'; exit 1; }
@@ -30,7 +30,7 @@ fi
 systemctl enable --now docker
 if ! bash scripts/prepare-gpu.sh "$(cat acceleration 2>/dev/null || echo cpu)"; then
     echo 'Подготовка GPU не пройдена. Автоматически настраиваем процессор.'
-    python3 scripts/configure-acceleration.py /opt/shtab-ai-021 cpu
+    python3 scripts/configure-acceleration.py /opt/shtab-ai cpu
 fi
 if [[ $(cat access-mode 2>/dev/null || true) == lan ]]; then
     bash scripts/network-firewall.sh apply
@@ -43,7 +43,7 @@ PartOf=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/bin/bash /opt/shtab-ai-021/scripts/network-firewall.sh apply
+ExecStart=/bin/bash /opt/shtab-ai/scripts/network-firewall.sh apply
 [Install]
 WantedBy=multi-user.target
 EOF
@@ -61,8 +61,8 @@ if [[ -z $external ]]; then dc up -d --wait --wait-timeout 240 ollama; fi
 mkdir -p download-progress
 chown 10001:10001 download-progress
 chmod 755 download-progress
-ln -sfn /opt/shtab-ai-021/download-progress/qwen-progress.json "$state/qwen-progress.json"
-ln -sfn /opt/shtab-ai-021/download-progress/whisper-progress.json "$state/whisper-progress.json"
+ln -sfn /opt/shtab-ai/download-progress/qwen-progress.json "$state/qwen-progress.json"
+ln -sfn /opt/shtab-ai/download-progress/whisper-progress.json "$state/whisper-progress.json"
 rm -f download-progress/qwen-progress.json download-progress/whisper-progress.json
 stage DOWNLOADING_QWEN
 if [[ -n $external ]]; then
@@ -79,7 +79,7 @@ if [[ -z $external ]]; then
     set -e
     if [[ $result == 20 ]]; then
         echo 'GPU для Qwen не подтверждена. Переключаем Ollama на CPU.'
-        python3 scripts/configure-acceleration.py /opt/shtab-ai-021 cpu
+        python3 scripts/configure-acceleration.py /opt/shtab-ai cpu
         dc build web
         dc up -d --wait --wait-timeout 240 ollama
         dc run --rm -v "$PWD/download-progress:/gpu-result" -e SHTAB_GPU_RESULT_ROOT=/gpu-result web python /installer/ollama-api.py check cpu
@@ -89,11 +89,11 @@ stage DOWNLOADING_WHISPER
 if ! dc --profile setup run --rm asr-download; then
     if [[ $(cat acceleration) != nvidia ]]; then exit 1; fi
     echo 'Запуск контейнера Whisper на GPU не прошёл. Проверяем CPU.'
-    python3 scripts/apply-asr-cpu.py /opt/shtab-ai-021
+    python3 scripts/apply-asr-cpu.py /opt/shtab-ai
     dc --profile setup run --rm asr-download
 fi
 if python3 -c 'import json; from pathlib import Path; p=Path("download-progress/asr-compute.json"); raise SystemExit(0 if p.exists() and json.loads(p.read_text())["device"] == "cpu" else 1)'; then
-    python3 scripts/apply-asr-cpu.py /opt/shtab-ai-021
+    python3 scripts/apply-asr-cpu.py /opt/shtab-ai
 fi
 stage CHECKING_DATABASE_AND_MODELS
 dc run --rm web python manage.py check
@@ -112,5 +112,5 @@ stage STARTING_SERVICES
 dc up -d --wait --wait-timeout 240 web meeting-worker llm-worker brief-worker proxy
 bash scripts/check-https.sh
 stage READY_FOR_ADMIN
-echo 'Components ready. Create administrator: sudo /opt/shtab-ai-021/shtabctl bootstrap'
+echo 'Components ready. Create administrator: sudo /opt/shtab-ai/shtabctl bootstrap'
 

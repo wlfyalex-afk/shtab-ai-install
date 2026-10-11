@@ -2,7 +2,7 @@
 param([Parameter(Mandatory=$true)][string]$ManifestPath)
 $ErrorActionPreference='Stop'
 $manifest=Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
-if ($manifest.Product -ne 'ShtabAI' -or $manifest.DistroName -notmatch '^ShtabAI-[A-Za-z0-9-]+$') { throw 'Некорректное описание установки.' }
+if ($manifest.Product -ne 'ShtabAI' -or $manifest.DistroName -notmatch '^ShtabAI(?:-[A-Za-z0-9-]+)?$') { throw 'Некорректное описание установки.' }
 $folder=Join-Path ([Environment]::GetFolderPath('Desktop')) 'ShtabAI-support'
 New-Item -ItemType Directory -Path $folder -Force | Out-Null
 $file=Join-Path $folder ('ShtabAI-diagnostics-'+(Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+[guid]::NewGuid().ToString('N').Substring(0,8)+'.txt')
@@ -68,7 +68,7 @@ Add-DiagnosticSection 'Автозапуск' {
     Get-ScheduledTaskInfo -TaskName $manifest.TaskName | Select-Object LastRunTime,LastTaskResult | Format-List
 }
 Add-DiagnosticSection 'Приложение и журналы Linux' {
-    Read-DiagnosticNative $wsl ('--distribution '+$manifest.DistroName+' --user root --exec /usr/bin/python3 /opt/shtab-ai-021/scripts/support-report.py --stdout') -TimeoutMilliseconds 90000
+    Read-DiagnosticNative $wsl ('--distribution '+$manifest.DistroName+' --user root --exec /usr/bin/python3 /opt/shtab-ai/scripts/support-report.py --stdout') -TimeoutMilliseconds 90000
 }
 foreach ($name in @('runtime-error.log','ollama-error.log','ollama.log')) {
     $path=Join-Path $manifest.Root $name

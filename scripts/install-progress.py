@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only progress display for Shtab.AI installer 021."""
+"""Read-only progress display for Shtab.AI installer."""
 import argparse
 import pathlib
 import subprocess
@@ -75,7 +75,7 @@ def main():
     parser.add_argument('--once', action='store_true', help='Показать один раз')
     parser.add_argument('--json', action='store_true', help='Статус и сведения о модели в JSON')
     parser.add_argument('--timeout', type=int, default=0, help='Предельное время ожидания в секундах')
-    parser.add_argument('--state-file', default='/var/lib/shtab-ai-021/status')
+    parser.add_argument('--state-file', default='/var/lib/shtab-ai/status')
     args = parser.parse_args()
     live = sys.stdout.isatty() and not args.once and not args.json
     started = time.monotonic()
@@ -117,7 +117,7 @@ def main():
                 lines.append('Индикатор обновляется каждые 3 с; время не означает продвижение операции.')
             if status == 'READY_FOR_ADMIN':
                 lines.extend(['', '100% — готовность компонентов; настройка пользователя выполняется отдельно.',
-                              'Завершить настройку: sudo /opt/shtab-ai-021/shtabctl finish'])
+                              'Завершить настройку: sudo /opt/shtab-ai/shtabctl finish'])
             else:
                 lines.extend(['', 'Ctrl+C — закрыть просмотр; установка работает отдельно.'])
             final_text = '\n'.join(lines)

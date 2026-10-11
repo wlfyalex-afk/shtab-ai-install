@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-cd /opt/shtab-ai-021
+cd /opt/shtab-ai
 dc() { bash scripts/dc.sh "$@"; }
 echo '=== VM memory ==='
 free -h

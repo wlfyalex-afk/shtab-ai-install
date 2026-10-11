@@ -4,7 +4,7 @@ param([Parameter(Mandatory=$true)][string]$ManifestPath)
 $ErrorActionPreference = 'Stop'
 [Net.WebRequest]::DefaultWebProxy = New-Object Net.WebProxy
 $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
-if ($manifest.Product -ne 'ShtabAI' -or $manifest.Backend -ne 'WSL2' -or $manifest.DistroName -notmatch '^ShtabAI-[A-Za-z0-9-]+$') { throw 'Некорректное описание установки.' }
+if ($manifest.Product -ne 'ShtabAI' -or $manifest.Backend -ne 'WSL2' -or $manifest.DistroName -notmatch '^ShtabAI(?:-[A-Za-z0-9-]+)?$') { throw 'Некорректное описание установки.' }
 $root = Split-Path $ManifestPath
 if ([IO.Path]::GetFullPath($manifest.Root) -ne [IO.Path]::GetFullPath($root)) { throw 'Путь установки не соответствует её описанию.' }
 $wsl = Join-Path $env:SystemRoot 'System32\wsl.exe'
@@ -74,15 +74,15 @@ function Sync-LAN([string]$IP) {
     $script:lastForward = $key
 }
 function Sync-GuestConfig([string]$Gateway) {
-    $config = '/opt/shtab-ai-021/scripts/runtime-config.py'
+    $config = '/opt/shtab-ai/scripts/runtime-config.py'
     & $wsl --distribution $manifest.DistroName --user root --exec /usr/bin/test -f $config
     if ($LASTEXITCODE -ne 0) { return }
     $hostName = if ($manifest.LANAddress) { $manifest.LANAddress } else { 'localhost' }
     $changed = (Guest /usr/bin/python3 $config "http://${Gateway}:11435" $hostName | Out-String).Trim()
     if ($changed -eq 'CHANGED') {
         Guest /bin/systemctl start docker
-        Guest /bin/bash /opt/shtab-ai-021/scripts/dc.sh up -d --no-deps web meeting-worker llm-worker brief-worker proxy
-        Guest /bin/rm -f /opt/shtab-ai-021/.runtime-config-pending
+        Guest /bin/bash /opt/shtab-ai/scripts/dc.sh up -d --no-deps web meeting-worker llm-worker brief-worker proxy
+        Guest /bin/rm -f /opt/shtab-ai/.runtime-config-pending
     }
 }
 try {
@@ -98,9 +98,9 @@ try {
         $gateway = $Matches[1]
         if (-not $ip) { throw 'Адрес WSL недоступен.' }
         $mode = [string]$manifest.Acceleration
-        & $wsl --distribution $manifest.DistroName --user root --exec /usr/bin/test -f /opt/shtab-ai-021/native-cpu-fallback.json
+        & $wsl --distribution $manifest.DistroName --user root --exec /usr/bin/test -f /opt/shtab-ai/native-cpu-fallback.json
         if ($LASTEXITCODE -eq 0) {
-            $fallback = (Guest /bin/cat /opt/shtab-ai-021/native-cpu-fallback.json | Out-String) | ConvertFrom-Json
+            $fallback = (Guest /bin/cat /opt/shtab-ai/native-cpu-fallback.json | Out-String) | ConvertFrom-Json
             if ($fallback.mode -eq 'cpu') { $mode='cpu' }
         }
         if ($mode -ne $lastMode -or $ip -ne $lastIP -or $gateway -ne $lastGateway -or -not $server -or $server.HasExited) {
@@ -133,13 +133,13 @@ try {
                 $freshMode.Acceleration='cpu'
                 [IO.File]::WriteAllText($ManifestPath,($freshMode | ConvertTo-Json),(New-Object Text.UTF8Encoding($false)))
                 $manifest.Acceleration='cpu'
-                & $wsl --distribution $manifest.DistroName --user root --exec /usr/bin/test -d /opt/shtab-ai-021
-                if ($LASTEXITCODE -eq 0) { Guest /bin/touch /opt/shtab-ai-021/native-cpu-applied }
+                & $wsl --distribution $manifest.DistroName --user root --exec /usr/bin/test -d /opt/shtab-ai
+                if ($LASTEXITCODE -eq 0) { Guest /bin/touch /opt/shtab-ai/native-cpu-applied }
             }
         }
         Sync-LAN $ip
         if ($mode -eq 'cpu' -and $fallback -and $fallback.mode -eq 'cpu') {
-            Guest /bin/touch /opt/shtab-ai-021/native-cpu-applied
+            Guest /bin/touch /opt/shtab-ai/native-cpu-applied
         }
         Sync-GuestConfig $gateway
         Write-State $ip $gateway

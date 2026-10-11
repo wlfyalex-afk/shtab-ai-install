@@ -2,7 +2,7 @@
 #Requires -RunAsAdministrator
 [CmdletBinding()]
 param(
-    [ValidatePattern('^ShtabAI-[A-Za-z0-9-]+$')][string]$DistroName = 'ShtabAI-021',
+    [ValidatePattern('^ShtabAI(?:-[A-Za-z0-9-]+)?$')][string]$DistroName = 'ShtabAI',
     [ValidateSet('ask','auto','cpu','nvidia','amd')][string]$Acceleration = 'ask',
     [ValidateSet('ask','local','lan')][string]$Access = 'ask',
     [ValidateRange(1024,65535)][int]$HTTPSPort = 8445,
@@ -147,7 +147,7 @@ function Complete-ShtabGuestInstallation {
     $started = Get-Date
     $deadline = $started.AddHours(3)
     do {
-        $snapshot = (Invoke-Guest /usr/bin/python3 /opt/shtab-ai-021/scripts/install-progress.py --json | Out-String) | ConvertFrom-Json
+        $snapshot = (Invoke-Guest /usr/bin/python3 /opt/shtab-ai/scripts/install-progress.py --json | Out-String) | ConvertFrom-Json
         $status = [string]$snapshot.status
         Show-AppStage $status
         if ($status -in @('DOWNLOADING_QWEN','DOWNLOADING_WHISPER')) { Show-ModelProgress $snapshot.progress } else { Show-OperationProgress $snapshot.operation }
@@ -160,10 +160,10 @@ function Complete-ShtabGuestInstallation {
     } while ($true)
     Write-Progress -Id 3 -Activity 'Текущая операция' -Completed
     Show-Stage 15 'Настройка сертификата HTTPS'
-    Invoke-Guest /opt/shtab-ai-021/shtabctl certificate
+    Invoke-Guest /opt/shtab-ai/shtabctl certificate
     $cert = Join-Path $root 'shtab-ai-root.crt'
     $guestCert = (Invoke-Guest wslpath -u $cert | Out-String).Trim()
-    Invoke-Guest /bin/cp /opt/shtab-ai-021/shtab-ai-root.crt $guestCert
+    Invoke-Guest /bin/cp /opt/shtab-ai/shtab-ai-root.crt $guestCert
     $imported = Import-Certificate -FilePath $cert -CertStoreLocation Cert:\CurrentUser\Root
     # The background runtime can update the LAN address while models download.
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
@@ -171,9 +171,9 @@ function Complete-ShtabGuestInstallation {
     Write-UTF8 $manifestPath ($manifest | ConvertTo-Json)
     Show-Stage 16 'Создание администратора'
     Write-Host 'Создайте первого администратора (пароль не отображается при вводе):'
-    $userCount = (Invoke-Guest /bin/bash -c "cd /opt/shtab-ai-021; bash scripts/dc.sh exec -T db psql -U shtab_ai -d shtab_ai -Atc 'SELECT count(*) FROM secretary_users'" | Out-String).Trim()
+    $userCount = (Invoke-Guest /bin/bash -c "cd /opt/shtab-ai; bash scripts/dc.sh exec -T db psql -U shtab_ai -d shtab_ai -Atc 'SELECT count(*) FROM secretary_users'" | Out-String).Trim()
     if ($userCount -notmatch '^[0-9]+$') { throw 'Не удалось проверить наличие администратора.' }
-    if ([long]$userCount -eq 0) { Invoke-Guest /opt/shtab-ai-021/shtabctl bootstrap }
+    if ([long]$userCount -eq 0) { Invoke-Guest /opt/shtab-ai/shtabctl bootstrap }
     else { Write-Host 'Администратор уже создан; пользователи сохранены.' -ForegroundColor Green }
     $url = "https://localhost:$HTTPSPort/login"
     Write-UTF8 $shortcut ("[InternetShortcut]`nURL=$url`n")
@@ -245,7 +245,7 @@ function Resume-ShtabInstallation {
 # Continue the installed version with its original secrets, volumes and cache.
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Запустите с sudo.'; exit 1; }
-cd /opt/shtab-ai-021
+cd /opt/shtab-ai
 for file in installation-created .env compose.yaml secrets/db_password secrets/flask_secret scripts/provision.sh; do
     [[ -f $file ]] || { echo "Неполная конфигурация установки: $file. Данные сохранены."; exit 1; }
 done
@@ -257,7 +257,7 @@ if [[ $active == activating || $active == active ]]; then
     echo 'Установка уже идёт; подключаемся к её прогрессу.'
     exit 0
 fi
-status=$(cat /var/lib/shtab-ai-021/status 2>/dev/null || true)
+status=$(cat /var/lib/shtab-ai/status 2>/dev/null || true)
 if [[ $status == READY_FOR_ADMIN ]]; then
     echo 'Компоненты установлены; завершаем настройку.'
     exit 0
@@ -270,13 +270,13 @@ from pathlib import Path
 spec = importlib.util.spec_from_file_location('runtime_config', 'scripts/runtime-config.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
-module.reconcile(Path('/opt/shtab-ai-021'), sys.argv[1], sys.argv[2], 'READY_FOR_ADMIN')
+module.reconcile(Path('/opt/shtab-ai'), sys.argv[1], sys.argv[2], 'READY_FOR_ADMIN')
 PY
 fi
 echo 'Продолжаем установку. Полученные файлы моделей и данные сохраняются.'
 systemctl reset-failed "$unit"
 # Avoid reading a stale FAILED status before the background process starts.
-printf 'RESUMING\n' > /var/lib/shtab-ai-021/status
+printf 'RESUMING\n' > /var/lib/shtab-ai/status
 systemctl start --no-block "$unit"
 '@
         Write-UTF8 $resumeFile $resumeText
@@ -320,6 +320,10 @@ if (-not (Test-WSLInstalled)) {
     return
 }
 $resumeIndex = Join-Path (Join-Path $env:LOCALAPPDATA 'ShtabAI') ($DistroName + '.json')
+if ($DistroName -eq 'ShtabAI' -and -not (Test-Path -LiteralPath $resumeIndex)) {
+    $older=@(Read-Distros | Where-Object { $_ -match '^ShtabAI-[0-9]{3}$' })
+    if ($older.Count) { throw 'Обнаружена прежняя установка Штаб.AI. Сохраните нужные данные и удалите её через меню перед установкой с нейтральными именами. Кэш сохраняется.' }
+}
 $recoverManifest = $null
 if (Test-Path -LiteralPath $resumeIndex) {
     $record = Get-Content -LiteralPath $resumeIndex -Raw | ConvertFrom-Json
@@ -333,7 +337,11 @@ if (Test-Path -LiteralPath $resumeIndex) {
         & $script:wsl --distribution $DistroName --user root --exec /usr/bin/test -f /etc/systemd/system/shtab-ai-install.service
         $prepared = $LASTEXITCODE -eq 0
     }
-    if ($prepared) { Resume-ShtabInstallation $resumeIndex; return }
+    if ($prepared) {
+        & $script:wsl --distribution $DistroName --user root --exec /usr/bin/test -d /opt/shtab-ai
+        if ($LASTEXITCODE -ne 0) { throw 'Эта установка использует прежнюю структуру каталогов. Удалите её через меню перед новой установкой; кэш и резервные копии сохранятся.' }
+        Resume-ShtabInstallation $resumeIndex; return
+    }
     Write-Host 'Продолжаем подготовку Windows и Ubuntu. Архивы в кэше сохраняются.' -ForegroundColor Cyan
     $InstallDir = $recordRoot
     $Revision = [string]$recoverManifest.Revision
@@ -570,7 +578,7 @@ try {
     $setup = 'set -euo pipefail; apt-get update; DEBIAN_FRONTEND=noninteractive apt-get install -y unzip python3 curl ca-certificates openssl; work=$(mktemp -d); trap ''rm -rf "$work"'' EXIT; unzip -q ' + (Quote-Shell $guestArchive) + ' -d "$work"; cd "$work"/*; sha256sum --quiet -c SHA256SUMS; SHTAB_EXTERNAL_OLLAMA_ENDPOINT=' + (Quote-Shell $runtimeState.Endpoint) + ' SHTAB_MODEL_CACHE=' + (Quote-Shell $guestCache) + ' SHTAB_WINDOWS_ACCELERATION=' + $Acceleration + ' SHTAB_HTTPS_PORT=' + $HTTPSPort + ' bash install.sh ' + $httpsHost + ' ' + $guestMode
     Invoke-Guest /bin/bash -c $setup
     $guestBackups = (Invoke-Guest wslpath -u $backupPath | Out-String).Trim()
-    Invoke-Guest /bin/bash -c ('printf ''%s\n'' ' + (Quote-Shell $guestBackups) + ' > /opt/shtab-ai-021/backup-directory')
+    Invoke-Guest /bin/bash -c ('printf ''%s\n'' ' + (Quote-Shell $guestBackups) + ' > /opt/shtab-ai/backup-directory')
     Complete-ShtabGuestInstallation
 } finally {
     Write-Progress -Id 3 -Activity 'Загрузка модели' -Completed

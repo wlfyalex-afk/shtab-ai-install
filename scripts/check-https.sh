@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-cd /opt/shtab-ai-021
+cd /opt/shtab-ai
 host=$(sed -n 's/^SHTAB_HTTPS_HOST=//p' .env)
 bind=$(sed -n 's/^SHTAB_HTTPS_BIND_IP=//p' .env | tail -1)
 port=$(sed -n 's/^SHTAB_HTTPS_PORT=//p' .env | tail -1)
@@ -37,7 +37,7 @@ for attempt in {1..5}; do
         echo 'страница входа доступна, сертификат проверен.'
         install -m 0644 "$ca" shtab-ai-root.crt
         openssl x509 -in shtab-ai-root.crt -noout -fingerprint -sha256
-        echo 'HTTPS исправен. Корневой сертификат: /opt/shtab-ai-021/shtab-ai-root.crt'
+        echo 'HTTPS исправен. Корневой сертификат: /opt/shtab-ai/shtab-ai-root.crt'
         echo 'Это локальная проверка; доступ с другого ПК и доверие его браузера проверяются отдельно.'
         exit 0
     else
@@ -55,5 +55,5 @@ case $last_code in
 esac
 [[ ! -s $err ]] || cat "$err"
 echo 'Статус: пункт 1. Журнал proxy/web:'
-echo 'sudo docker compose -f /opt/shtab-ai-021/compose.yaml logs --tail 50 proxy web'
+echo 'sudo docker compose -f /opt/shtab-ai/compose.yaml logs --tail 50 proxy web'
 exit 1

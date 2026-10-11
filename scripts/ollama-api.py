@@ -65,7 +65,7 @@ def probe(base, cpu=False):
 
 
 def check(base, acceleration, root=None):
-    root = root or Path(os.environ.get('SHTAB_GPU_RESULT_ROOT', '/opt/shtab-ai-021'))
+    root = root or Path(os.environ.get('SHTAB_GPU_RESULT_ROOT', '/opt/shtab-ai'))
     reason = ''
     try:
         vram = probe(base, cpu=(acceleration == 'cpu'))
@@ -101,7 +101,7 @@ def check(base, acceleration, root=None):
 
 
 if __name__ == '__main__':
-    root = Path('/opt/shtab-ai-021')
+    root = Path('/opt/shtab-ai')
     base = endpoint(root)
     if not base:
         raise SystemExit('Ollama endpoint is not configured')

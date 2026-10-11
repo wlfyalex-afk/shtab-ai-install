@@ -15,7 +15,7 @@ def configuration(mode):
         ]}}}
         services['ollama'] = {'deploy': gpu}
         for name in ('web', 'meeting-worker', 'llm-worker', 'brief-worker', 'asr-download'):
-            services[name] = {'image': 'shtab-ai-021-app:0.21.0-rc3-nvidia',
+            services[name] = {'image': 'shtab-ai-app:local-nvidia',
                               'build': {'args': {'INSTALL_CUDA': '1'}}}
         for name in ('meeting-worker', 'asr-download'):
             services[name].update(deploy=gpu, environment={

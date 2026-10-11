@@ -76,7 +76,12 @@ function Remove-ShtabShortcuts($Manifest,[string]$Root) {
 }
 
 $log=Join-Path $PSScriptRoot ('ShtabAI-cleanup-'+(Get-Date -Format yyyyMMdd-HHmmss)+'.log')
-$record=Join-Path $env:LOCALAPPDATA 'ShtabAI\ShtabAI-021.json'
+$record=Join-Path $env:LOCALAPPDATA 'ShtabAI\ShtabAI.json'
+if (-not (Test-Path -LiteralPath $record) -and -not $InstallDir) {
+    $indices=@(Get-ChildItem (Join-Path $env:LOCALAPPDATA 'ShtabAI') -File -Filter 'ShtabAI-*.json' -ErrorAction SilentlyContinue)
+    if ($indices.Count -eq 1) { $record=$indices[0].FullName }
+    elseif ($indices.Count -gt 1) { throw 'Найдено несколько установок. Укажите -InstallDir.' }
+}
 $transcribing=$false
 $exitCode=0
 try {
@@ -94,8 +99,9 @@ try {
     $passport=Join-Path $root 'installation.json'
     if (-not (Test-Path -LiteralPath $passport)) { throw 'Нет паспорта installation.json. Удалять папку вслепую нельзя.' }
     $manifest=Get-Content -LiteralPath $passport -Raw | ConvertFrom-Json
-    if ($manifest.Product -ne 'ShtabAI' -or $manifest.Backend -ne 'WSL2' -or $manifest.DistroName -ne 'ShtabAI-021' -or [IO.Path]::GetFullPath($manifest.Root).TrimEnd('\') -ine $root) { throw 'Паспорт не соответствует тестовой установке Штаб.AI.' }
+    if ($manifest.Product -ne 'ShtabAI' -or $manifest.Backend -ne 'WSL2' -or $manifest.DistroName -notmatch '^ShtabAI(?:-[A-Za-z0-9-]+)?$' -or [IO.Path]::GetFullPath($manifest.Root).TrimEnd('\') -ine $root) { throw 'Паспорт не соответствует тестовой установке Штаб.AI.' }
     $distro=$manifest.DistroName
+    $record=Join-Path (Join-Path $env:LOCALAPPDATA 'ShtabAI') ($distro+'.json')
     $task='ShtabAI-'+$distro+'-Start'
     $rule='ShtabAI-'+$distro+'-LAN'
     if ($manifest.TaskName -ne $task -or $manifest.LANRule -ne $rule -or $manifest.HTTPSPort -ne 8445) { throw 'Неожиданные имена задачи или сетевого правила.' }
@@ -110,7 +116,7 @@ try {
     $backup=''
     if ($RemoveBackups -and $manifest.BackupPath) {
         $backup=Assert-ShtabRoot $manifest.BackupPath
-        if ((Split-Path $backup -Leaf) -notin @('ShtabAI-Backups','shtab-ai-021-backups')) { throw 'Папка резервных копий имеет неожиданное имя; её удаление остановлено.' }
+        if ((Split-Path $backup -Leaf) -notmatch '^(ShtabAI|shtab-ai)(?:-[0-9]{3})?-Backups$') { throw 'Папка резервных копий имеет неожиданное имя; её удаление остановлено.' }
     }
     Write-Host ('Удаляем тестовую установку: '+$root) -ForegroundColor Yellow
     Write-Host 'Будут удалены её Ubuntu, база данных, службы, ярлыки и сетевые правила. Постоянный кэш архивов и моделей сохраняется.'

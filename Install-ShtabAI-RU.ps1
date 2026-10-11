@@ -327,7 +327,7 @@ function Get-ShtabAcceleration([string]$Requested='auto') {
 function Install-ShtabAI {
 [CmdletBinding()]
 param(
-    [ValidatePattern('^ShtabAI-[A-Za-z0-9-]+$')][string]$DistroName = 'ShtabAI-021',
+    [ValidatePattern('^ShtabAI(?:-[A-Za-z0-9-]+)?$')][string]$DistroName = 'ShtabAI',
     [ValidateSet('ask','auto','cpu','nvidia','amd')][string]$Acceleration = 'ask',
     [ValidateSet('ask','local','lan')][string]$Access = 'ask',
     [ValidateRange(1024,65535)][int]$HTTPSPort = 8445,
@@ -504,7 +504,7 @@ if (-not $InstallDir) {
     $InstallDir = Read-Host ("Папка установки (например D:\Apps\$DistroName) [$defaultRoot]")
     if (-not $InstallDir) { $InstallDir=$defaultRoot }
 }
-if ($InstallDir -notmatch '^[A-Za-z]:\\' -or $InstallDir -match '["\r\n]') { throw 'Укажите полный путь на локальном диске, например D:\Apps\ShtabAI-021.' }
+if ($InstallDir -notmatch '^[A-Za-z]:\\' -or $InstallDir -match '["\r\n]') { throw 'Укажите полный путь на локальном диске, например D:\Apps\ShtabAI.' }
 $root = [IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
 if ($ResumeEarly) { $resumeManifest = Get-EarlyInstallation $DistroName $root }
 $driveLetter = [IO.Path]::GetPathRoot($root).Substring(0,1)
@@ -728,11 +728,11 @@ try {
     Show-Stage 7 'Подготовка пакетов Ubuntu и запуск установки приложения'
     Invoke-Guest /bin/bash -c $setup
     $guestBackups = (Invoke-Guest wslpath -u $backupPath | Out-String).Trim()
-    Invoke-Guest /bin/bash -c ('printf ''%s\n'' ' + (Quote-Shell $guestBackups) + ' > /opt/shtab-ai-021/backup-directory')
+    Invoke-Guest /bin/bash -c ('printf ''%s\n'' ' + (Quote-Shell $guestBackups) + ' > /opt/shtab-ai/backup-directory')
     $started = Get-Date
     $deadline = $started.AddHours(3)
     do {
-        $snapshot = (Invoke-Guest /usr/bin/python3 /opt/shtab-ai-021/scripts/install-progress.py --json | Out-String) | ConvertFrom-Json
+        $snapshot = (Invoke-Guest /usr/bin/python3 /opt/shtab-ai/scripts/install-progress.py --json | Out-String) | ConvertFrom-Json
         $status = [string]$snapshot.status
         Show-AppStage $status
         if ($status -in @('DOWNLOADING_QWEN','DOWNLOADING_WHISPER')) { Show-ModelProgress $snapshot.progress } else { Show-OperationProgress $snapshot.operation }
@@ -745,16 +745,16 @@ try {
     } while ($true)
     Write-Progress -Id 3 -Activity 'Текущая операция' -Completed
     Show-Stage 15 'Настройка сертификата HTTPS'
-    Invoke-Guest /opt/shtab-ai-021/shtabctl certificate
+    Invoke-Guest /opt/shtab-ai/shtabctl certificate
     $cert = Join-Path $root 'shtab-ai-root.crt'
     $guestCert = (Invoke-Guest wslpath -u $cert | Out-String).Trim()
-    Invoke-Guest /bin/cp /opt/shtab-ai-021/shtab-ai-root.crt $guestCert
+    Invoke-Guest /bin/cp /opt/shtab-ai/shtab-ai-root.crt $guestCert
     $imported = Import-Certificate -FilePath $cert -CertStoreLocation Cert:\CurrentUser\Root
     $manifest.CertificateThumbprint = $imported.Thumbprint
     Write-UTF8 $manifestPath ($manifest | ConvertTo-Json)
     Show-Stage 16 'Создание администратора'
     Write-Host 'Создайте первого администратора (пароль вводится скрыто):'
-    Invoke-Guest /opt/shtab-ai-021/shtabctl bootstrap
+    Invoke-Guest /opt/shtab-ai/shtabctl bootstrap
     $url = "https://localhost:$HTTPSPort/login"
     Write-UTF8 $shortcut ("[InternetShortcut]`nURL=$url`n")
     $shell=New-Object -ComObject WScript.Shell
@@ -768,8 +768,8 @@ try {
     Show-Stage 17 'Проверка страницы входа и сетевого доступа'
     $response = Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 15
     if ($response.StatusCode -ne 200) { throw 'Проверка страницы входа из Windows не пройдена.' }
-    $qwenActual=(Invoke-Guest /bin/cat /opt/shtab-ai-021/qwen-compute.json | Out-String) | ConvertFrom-Json
-    $asrActual=(Invoke-Guest /bin/cat /opt/shtab-ai-021/download-progress/asr-compute.json | Out-String) | ConvertFrom-Json
+    $qwenActual=(Invoke-Guest /bin/cat /opt/shtab-ai/qwen-compute.json | Out-String) | ConvertFrom-Json
+    $asrActual=(Invoke-Guest /bin/cat /opt/shtab-ai/download-progress/asr-compute.json | Out-String) | ConvertFrom-Json
     Write-Host ('Проверенный режим Qwen: '+$qwenActual.device+'; Whisper: '+$asrActual.device) -ForegroundColor Green
     Write-Host "Штаб.AI готов: $url | выбранный предварительно режим: $Acceleration" -ForegroundColor Green
     $currentManifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
@@ -801,7 +801,7 @@ try {
     if ($Resume -and $RestartEarly) { throw 'Выберите только один режим: продолжить или начать заново.' }
     $freshDefault = ''
     if ($RestartEarly) {
-        $existing = Get-EarlyInstallation 'ShtabAI-021'
+        $existing = Get-EarlyInstallation 'ShtabAI'
         $freshDefault = $existing.Root
         Remove-EarlyInstallation $existing
     }
@@ -809,10 +809,10 @@ try {
     Write-Host '17 крупных вех имеют разную длительность. Процент показывает завершённые вехи.'
     Write-Host 'Время загрузки файлов оценивается по фактической скорости; общий срок пока неизвестен.'
     Show-Disks
-    $default = Join-Path $env:LOCALAPPDATA 'ShtabAI\ShtabAI-021'
+    $default = Join-Path $env:LOCALAPPDATA 'ShtabAI\ShtabAI'
     if ($freshDefault) { $default = $freshDefault }
     if ($Resume) {
-        $existing = Get-EarlyInstallation 'ShtabAI-021'
+        $existing = Get-EarlyInstallation 'ShtabAI'
         $installDir = $existing.Root
         Write-Host ('Продолжение установки в папке: ' + $installDir) -ForegroundColor Cyan
     } else {

@@ -1,7 +1,7 @@
 ﻿#Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [ValidatePattern('^ShtabAI-[A-Za-z0-9-]+$')][string]$DistroName='ShtabAI-021',
+    [ValidatePattern('^ShtabAI(?:-[A-Za-z0-9-]+)?$')][string]$DistroName='ShtabAI',
     [ValidateSet('ask','cpu','nvidia','amd')][string]$Acceleration='ask',
     [ValidateSet('ask','local','lan')][string]$Access='ask',
     [ValidateRange(1024,65535)][int]$HTTPSPort=8445,

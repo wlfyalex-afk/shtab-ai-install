@@ -1,13 +1,13 @@
 #!/bin/bash
-# Upgrade an existing 021 VM, without running model/database provisioning.
+# Upgrade an existing installation, without running model/database provisioning.
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Run with sudo'; exit 1; }
 src=$(cd "$(dirname "$0")/.." && pwd)
-dst=/opt/shtab-ai-021
+dst=/opt/shtab-ai
 [[ $src != "$dst" ]] || { echo 'Run this script from the newly extracted rc2 package'; exit 1; }
 [[ -f $dst/compose.yaml && -f $dst/.env ]] || { echo 'Existing installation not found'; exit 1; }
-mkdir -p /var/lib/shtab-ai-021
-exec 9>/var/lib/shtab-ai-021/install.lock
+mkdir -p /var/lib/shtab-ai
+exec 9>/var/lib/shtab-ai/install.lock
 flock -n 9 || { echo 'Installer running; wait'; exit 1; }
 for port in 80 443; do
     if ss -H -ltn "sport = :$port" | read -r _; then
@@ -20,19 +20,19 @@ import runpy,sys
 m=runpy.run_path(sys.argv[1]+'/scripts/configure-https.py')
 if sys.argv[2]: m['validate_host'](sys.argv[2])
 PY
-backup="/var/backups/shtab-ai-021/https-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+backup="/var/backups/shtab-ai/https-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 install -d -m 0700 "$backup"
-tar -czf "$backup/installation.tar.gz" -C /opt shtab-ai-021
+tar -czf "$backup/installation.tar.gz" -C /opt shtab-ai
 chmod 600 "$backup/installation.tar.gz"
 python3 - "$src" "$dst" <<'PY'
 from pathlib import Path
 import re,sys
 src,dst=map(Path,sys.argv[1:])
 old=(dst/'compose.yaml').read_text()
-image=re.search(r'^  image: (shtab-ai-021-app:[^\s]+)$',old,re.M)
+image=re.search(r'^  image: (shtab-ai-app:[^\s]+)$',old,re.M)
 if not image: raise SystemExit('Unknown app image; upgrade aborted')
 new=(src/'compose.yaml').read_text()
-new=re.sub(r'^  image: shtab-ai-021-app:[^\s]+$', '  image: '+image[1],new,count=1,flags=re.M)
+new=re.sub(r'^  image: shtab-ai-app:[^\s]+$', '  image: '+image[1],new,count=1,flags=re.M)
 (dst/'compose.yaml').write_text(new)
 p=dst/'app/app.py'
 s=p.read_text()

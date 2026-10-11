@@ -11,10 +11,17 @@ case "$access" in ask|local|lan) ;; *) echo 'Access: ask/local/lan'; exit 2;; es
 [[ $revision == main || $revision =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid revision'; exit 2; }
 source /etc/os-release
 [[ $ID == ubuntu && $VERSION_ID == 24.04 && $(uname -m) == x86_64 ]] || { echo 'Поддерживается Ubuntu 24.04 LTS x64.'; exit 1; }
+# Detect numbered layouts before creating any new resources; keep them intact.
+for previous in /opt/shtab-ai-[0-9][0-9][0-9]; do
+    if [[ -d $previous ]]; then
+        echo 'Обнаружена прежняя установка Штаб.AI. Сохраните нужные данные и выполните команду удаления из инструкции; кэш и резервные копии сохранятся.'
+        exit 1
+    fi
+done
 resuming=false
-if [[ -e /opt/shtab-ai-021 ]]; then
+if [[ -e /opt/shtab-ai ]]; then
     resuming=true
-    [[ -f /opt/shtab-ai-021/installation-created && -f /opt/shtab-ai-021/.env ]] || { echo 'Неполная конфигурация прежней установки. Данные сохранены.'; exit 1; }
+    [[ -f /opt/shtab-ai/installation-created && -f /opt/shtab-ai/.env ]] || { echo 'Неполная конфигурация прежней установки. Данные сохранены.'; exit 1; }
     echo 'Найдена установка Штаб.AI. Продолжаем без удаления.'
 fi
 umask 077
@@ -50,8 +57,8 @@ PY
 if ! $resuming; then
 if [[ -z $install_dir ]]; then
     lsblk -o NAME,FSTYPE,SIZE,MOUNTPOINTS
-    read -r -p 'Новая папка установки [/opt/shtab-ai-021], например /mnt/data/shtab-ai-021: ' install_dir
-    install_dir=${install_dir:-/opt/shtab-ai-021}
+    read -r -p 'Новая папка установки [/opt/shtab-ai], например /mnt/data/shtab-ai: ' install_dir
+    install_dir=${install_dir:-/opt/shtab-ai}
 fi
 if [[ $mode == ask ]]; then
     echo '1 — CPU Intel/AMD. 2 — NVIDIA (Whisper + Ollama). 3 — AMD (Ollama; Whisper на CPU).'
@@ -87,9 +94,9 @@ PY
     )
 fi
 echo "Приложение: $install_dir"
-if [[ $install_dir == /opt/shtab-ai-021 ]]; then
+if [[ $install_dir == /opt/shtab-ai ]]; then
     echo "Кэш моделей: ${SHTAB_MODEL_CACHE:-/var/cache/shtab-ai}"
-    echo 'Резервные копии: /var/backups/shtab-ai-021'
+    echo 'Резервные копии: /var/backups/shtab-ai'
 else
     echo "Кэш моделей: ${SHTAB_MODEL_CACHE:-${install_dir}-cache}"
     echo "Резервные копии: ${install_dir}-backups"
@@ -128,7 +135,7 @@ else
 # Continue the installed version with its original secrets, volumes and cache.
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Запустите с sudo.'; exit 1; }
-cd /opt/shtab-ai-021
+cd /opt/shtab-ai
 for file in installation-created .env compose.yaml secrets/db_password secrets/flask_secret scripts/provision.sh; do
     [[ -f $file ]] || { echo "Неполная конфигурация установки: $file. Данные сохранены."; exit 1; }
 done
@@ -140,7 +147,7 @@ if [[ $active == activating || $active == active ]]; then
     echo 'Установка уже идёт; подключаемся к её прогрессу.'
     exit 0
 fi
-status=$(cat /var/lib/shtab-ai-021/status 2>/dev/null || true)
+status=$(cat /var/lib/shtab-ai/status 2>/dev/null || true)
 if [[ $status == READY_FOR_ADMIN ]]; then
     echo 'Компоненты установлены; завершаем настройку.'
     exit 0
@@ -153,19 +160,19 @@ from pathlib import Path
 spec = importlib.util.spec_from_file_location('runtime_config', 'scripts/runtime-config.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
-module.reconcile(Path('/opt/shtab-ai-021'), sys.argv[1], sys.argv[2], 'READY_FOR_ADMIN')
+module.reconcile(Path('/opt/shtab-ai'), sys.argv[1], sys.argv[2], 'READY_FOR_ADMIN')
 PY
 fi
 echo 'Продолжаем установку. Полученные файлы моделей и данные сохраняются.'
 systemctl reset-failed "$unit"
 # Avoid reading a stale FAILED status before the background process starts.
-printf 'RESUMING\n' > /var/lib/shtab-ai-021/status
+printf 'RESUMING\n' > /var/lib/shtab-ai/status
 systemctl start --no-block "$unit"
 
     )
-    host=$(sed -n 's/^SHTAB_HTTPS_HOST=//p' /opt/shtab-ai-021/.env | tail -1)
-    mode=$(cat /opt/shtab-ai-021/acceleration)
-    access=$(cat /opt/shtab-ai-021/access-mode 2>/dev/null || echo local)
+    host=$(sed -n 's/^SHTAB_HTTPS_HOST=//p' /opt/shtab-ai/.env | tail -1)
+    mode=$(cat /opt/shtab-ai/acceleration)
+    access=$(cat /opt/shtab-ai/access-mode 2>/dev/null || echo local)
 fi
 # Embed the current finalizer so older installations can finish without reinstalling.
 finish_native() {
@@ -173,23 +180,23 @@ finish_native() {
 # Finish native Ubuntu setup after background provisioning, including a resumed run.
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Запустите с sudo.'; exit 1; }
-cd /opt/shtab-ai-021
-trap 'echo "Настройка не завершена. Данные сохранены. Повтор: sudo /opt/shtab-ai-021/shtabctl finish" >&2' ERR
+cd /opt/shtab-ai
+trap 'echo "Настройка не завершена. Данные сохранены. Повтор: sudo /opt/shtab-ai/shtabctl finish" >&2' ERR
 if [[ ${1:-} == --wait ]]; then
     python3 scripts/install-progress.py --timeout 10800
 fi
-status=$(cat /var/lib/shtab-ai-021/status 2>/dev/null || true)
+status=$(cat /var/lib/shtab-ai/status 2>/dev/null || true)
 [[ $status == READY_FOR_ADMIN ]] || {
-    echo 'Компоненты ещё не готовы. Продолжение: sudo /opt/shtab-ai-021/shtabctl resume'
-    echo 'Журнал: sudo /opt/shtab-ai-021/shtabctl logs'
+    echo 'Компоненты ещё не готовы. Продолжение: sudo /opt/shtab-ai/shtabctl resume'
+    echo 'Журнал: sudo /opt/shtab-ai/shtabctl logs'
     exit 1
 }
 # READY is written just before provisioning exits; wait for its lock to release.
-exec 9>/var/lib/shtab-ai-021/install.lock
+exec 9>/var/lib/shtab-ai/install.lock
 flock -w 30 9 || { echo 'Установка или обслуживание ещё работает. Повторите завершение позже.'; exit 1; }
 echo 'Штаб.AI — завершаем настройку: HTTPS → сертификат → администратор → ярлык.'
 bash scripts/check-https.sh
-certificate=/usr/local/share/ca-certificates/shtab-ai-021.crt
+certificate=/usr/local/share/ca-certificates/shtab-ai.crt
 [[ ! -e $certificate ]] || cmp -s "$certificate" shtab-ai-root.crt || {
     echo 'Другой сертификат с таким именем уже существует; остановлено без перезаписи.'
     exit 1
@@ -202,21 +209,21 @@ user_count=$(bash scripts/dc.sh exec -T db psql -U shtab_ai -d shtab_ai -Atc 'SE
 if [[ $user_count == 0 ]]; then
     [[ -t 0 && -t 1 ]] || {
         echo 'Для создания администратора нужен интерактивный терминал.'
-        echo 'Запустите: sudo /opt/shtab-ai-021/shtabctl finish'
+        echo 'Запустите: sudo /opt/shtab-ai/shtabctl finish'
         exit 1
     }
     echo 'Создаём первого администратора. Сейчас появятся вопросы; пароль при вводе не отображается.'
-    bash scripts/dc.sh exec web python bootstrap021.py
+    bash scripts/dc.sh exec web python bootstrap.py
 else
     echo 'Администратор уже создан; пользователи сохранены.'
 fi
-python3 scripts/create-desktop-shortcut.py /opt/shtab-ai-021 "${SUDO_USER:-}"
+python3 scripts/create-desktop-shortcut.py /opt/shtab-ai "${SUDO_USER:-}"
 host=$(sed -n 's/^SHTAB_HTTPS_HOST=//p' .env | tail -1)
 mode=$(cat acceleration)
 access=$(cat access-mode 2>/dev/null || echo local)
 echo "Настройка завершена. Откройте в браузере: https://$host/login. Режим: $mode."
 if [[ $access == lan ]]; then
-    echo 'На других ПК добавьте в доверенные публичный сертификат /opt/shtab-ai-021/shtab-ai-root.crt.'
+    echo 'На других ПК добавьте в доверенные публичный сертификат /opt/shtab-ai/shtab-ai-root.crt.'
     echo 'Доступ с другого ПК и доверие его браузера проверяются отдельно.'
 fi
 

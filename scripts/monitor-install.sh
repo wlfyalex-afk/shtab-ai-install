@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Read-only installation monitor for Ubuntu / Shtab.AI 021.
+# Read-only installation monitor for Ubuntu / Shtab.AI.
 set -u
 if [[ ${1:-} == --help ]]; then
     printf 'Запуск: bash %s\n' "${BASH_SOURCE[0]##*/}"
@@ -8,11 +8,11 @@ if [[ ${1:-} == --help ]]; then
 fi
 self=$(readlink -f "${BASH_SOURCE[0]}")
 if (( EUID != 0 )); then exec sudo bash "$self" "$@"; fi
-root=/opt/shtab-ai-021
+root=/opt/shtab-ai
 unit=shtab-ai-install.service
 selected=$root
 cache=/var/cache/shtab-ai
-backups=/var/backups/shtab-ai-021
+backups=/var/backups/shtab-ai
 if command -v python3 >/dev/null; then
     mapfile -t paths < <(python3 - "$root" <<'PY'
 import json, sys
@@ -20,7 +20,7 @@ from pathlib import Path
 root = Path(sys.argv[1])
 selected = str(root)
 cache = '/var/cache/shtab-ai'
-backups = '/var/backups/shtab-ai-021'
+backups = '/var/backups/shtab-ai'
 try:
     selected = json.loads((root/'storage.json').read_text())['root']
 except (OSError, ValueError, KeyError):
@@ -68,11 +68,11 @@ overview() {
     printf '\nСлужба установки:\n'
     systemctl show "$unit" -p ActiveState -p SubState -p Result
     printf '\nЭтап: '
-    if [[ -f /var/lib/shtab-ai-021/status ]]; then cat /var/lib/shtab-ai-021/status; else echo 'Статус пока отсутствует.'; fi
+    if [[ -f /var/lib/shtab-ai/status ]]; then cat /var/lib/shtab-ai/status; else echo 'Статус пока отсутствует.'; fi
     printf '\nПриложение: %s\nКэш моделей: %s\nБэкапы: %s\n' "$selected" "$cache" "$backups"
     printf '\nКонтейнеры Штаб.AI:\n'
     if docker_available; then
-        docker ps -a --filter label=com.docker.compose.project=shtab-ai-021 --format 'table {{.Names}}\t{{.Status}}'
+        docker ps -a --filter label=com.docker.compose.project=shtab-ai --format 'table {{.Names}}\t{{.Status}}'
     else echo 'Docker пока не установлен или недоступен.'; fi
     printf '\nСвободное место:\n'
     df -h -- / "$(dirname "$selected")"
@@ -125,14 +125,14 @@ while true; do
         3) journalctl -fu "$unit" -o cat ;;
         4) live --cache ;;
         5) if docker_available; then
-               mapfile -t containers < <(docker ps -q --filter label=com.docker.compose.project=shtab-ai-021)
+               mapfile -t containers < <(docker ps -q --filter label=com.docker.compose.project=shtab-ai)
                if (( ${#containers[@]} )); then docker stats "${containers[@]}";
                else echo 'Пока нет работающих контейнеров Штаб.AI.'; pause; fi
            else echo 'Docker недоступен.'; pause; fi ;;
         6) top -c ;;
         7) live --processes ;;
         8) if docker_available; then
-               mapfile -t databases < <(docker ps -aq --filter label=com.docker.compose.project=shtab-ai-021 --filter label=com.docker.compose.service=db)
+               mapfile -t databases < <(docker ps -aq --filter label=com.docker.compose.project=shtab-ai --filter label=com.docker.compose.service=db)
                if (( ${#databases[@]} )); then
                    docker inspect --format '{{.Name}}: {{.State.Status}} {{if .State.Health}}/ {{.State.Health.Status}}{{end}}' "${databases[0]}"
                    docker logs --tail 80 "${databases[0]}"

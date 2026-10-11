@@ -1,19 +1,19 @@
 #!/bin/bash
-# Update the user position forms on an existing 021 VM.
+# Update the user position forms on an existing installation.
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Запустите через sudo.'; exit 1; }
 src=$(cd "$(dirname "$0")/.." && pwd)
-dst=/opt/shtab-ai-021
-[[ -f $dst/compose.yaml && -f $dst/app/user_admin010.py ]] || { echo 'Установка 021 не найдена.'; exit 1; }
+dst=/opt/shtab-ai
+[[ -f $dst/compose.yaml && -f $dst/app/user_admin010.py ]] || { echo 'Установка Штаб.AI не найдена.'; exit 1; }
 [[ $src != "$dst" ]] || { echo 'Запустите скрипт из нового распакованного пакета.'; exit 1; }
-exec 9>/var/lib/shtab-ai-021/install.lock
+exec 9>/var/lib/shtab-ai/install.lock
 flock -n 9 || { echo 'Другая операция обслуживания ещё работает.'; exit 1; }
 cd "$dst"
 active=$(systemctl show shtab-ai-install.service -p ActiveState --value)
 [[ $active != active && $active != activating ]] || { echo 'Дождитесь завершения установщика.'; exit 1; }
 image=$(docker compose -f compose.yaml config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["web"]["image"])')
 old_image=$(docker image inspect "$image" --format '{{.Id}}')
-backup="/var/backups/shtab-ai-021/users-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+backup="/var/backups/shtab-ai/users-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 install -d -m 0700 "$backup/templates"
 cp "$dst/app/user_admin010.py" "$backup/"
 cp "$dst/app/templates/users010.html" "$backup/templates/"

@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import sys
 
-CANONICAL = Path('/opt/shtab-ai-021')
+CANONICAL = Path('/opt/shtab-ai')
 UNITS = Path('/etc/systemd/system')
 VOLUMES = ('db_data', 'app_data', 'asr_models', 'ollama_models')
 
@@ -16,10 +16,10 @@ VOLUMES = ('db_data', 'app_data', 'asr_models', 'ollama_models')
 def validate_path(value):
     path = Path(value)
     if not re.fullmatch(r'/[\w./-]+', value) or '..' in path.parts or len(path.parts) < 3:
-        raise ValueError('Use an absolute new application folder without spaces, for example /mnt/data/shtab-ai-021')
+        raise ValueError('Use an absolute new application folder without spaces, for example /mnt/data/shtab-ai')
     if path == CANONICAL or CANONICAL not in path.parents:
         return path
-    raise ValueError('The custom folder cannot be inside /opt/shtab-ai-021')
+    raise ValueError('The custom folder cannot be inside /opt/shtab-ai')
 
 
 def filesystem(path):
@@ -47,7 +47,7 @@ def prepare(value):
         if not any(item.get('target') == fs['target'] and item.get('uuid') == fs['uuid'] for item in mounts):
             raise ValueError('The selected partition must be mounted persistently through /etc/fstab before installation')
     if shutil.disk_usage(parent).free < 30*1024**3: raise ValueError('At least 30 GiB free on the selected filesystem is required')
-    backups = Path('/var/backups/shtab-ai-021') if selected == CANONICAL else selected.with_name(selected.name+'-backups')
+    backups = Path('/var/backups/shtab-ai') if selected == CANONICAL else selected.with_name(selected.name+'-backups')
     if backups.is_symlink(): raise ValueError('Backup folder must not be a symbolic link')
     unit = '' if selected == CANONICAL else subprocess.check_output(['systemd-escape', '-p', '--suffix=mount', str(CANONICAL)], text=True).strip()
     if unit and (UNITS/unit).exists(): raise ValueError('Mount unit already exists; nothing changed')

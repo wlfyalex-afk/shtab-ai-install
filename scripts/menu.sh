@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-ctl=/opt/shtab-ai-021/shtabctl
+ctl=/opt/shtab-ai/shtabctl
 while [[ -f $ctl ]]; do
     cat <<'MENU'
 
@@ -36,7 +36,7 @@ MENU
       6) args=(backups) ;;
       7)
         echo 'Восстановление из КАТАЛОГА РЕЗЕРВНОЙ КОПИИ.'
-        echo 'Каталог приложения /opt/shtab-ai-021 указывать не нужно.'
+        echo 'Каталог приложения /opt/shtab-ai указывать не нужно.'
         if ! listing=$("$ctl" backups); then
             echo 'Не удалось получить список копий. Сообщения выше.'
             continue
@@ -82,11 +82,11 @@ MENU
       16) args=(monitor) ;;
       17) args=(resume) ;;
       14)
-        if [[ -f /opt/shtab-ai-021/storage.json ]]; then
+        if [[ -f /opt/shtab-ai/storage.json ]]; then
             cd /
-            exec bash /opt/shtab-ai-021/scripts/full-uninstall.sh
+            exec bash /opt/shtab-ai/scripts/full-uninstall.sh
         fi
-        if [[ -f /opt/shtab-ai-021/windows-acceleration ]]; then
+        if [[ -f /opt/shtab-ai/windows-acceleration ]]; then
             echo 'Для полного удаления используйте Uninstall-ShtabAI-Windows.ps1 в Windows. Копии на диске Windows сохранятся.'
             continue
         fi
@@ -96,8 +96,8 @@ MENU
         read -r -p 'Режим (0 — отмена): ' mode || exit 0
         case "$mode" in
           1)
-            read -r -p 'Для остановки и удаления контейнеров введите STOP-SHTAB-021: ' answer || exit 0
-            [[ $answer == STOP-SHTAB-021 ]] || continue
+            read -r -p 'Для остановки и удаления контейнеров введите STOP-SHTAB: ' answer || exit 0
+            [[ $answer == STOP-SHTAB ]] || continue
             args=(uninstall --keep-data) ;;
           2) args=(uninstall --fresh) ;;
           3) args=(uninstall --purge-all) ;;

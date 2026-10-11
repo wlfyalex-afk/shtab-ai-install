@@ -44,7 +44,7 @@ def create(root, user):
         print(f'Существующий ярлык управления сохранён: {manager}')
         manager_record = ''
     else:
-        manager.write_text('[Desktop Entry]\nVersion=1.0\nType=Application\nName=Управление Штаб.AI\nExec=sudo /opt/shtab-ai-021/shtabctl menu\nTerminal=true\nIcon=utilities-terminal\n')
+        manager.write_text('[Desktop Entry]\nVersion=1.0\nType=Application\nName=Управление Штаб.AI\nExec=sudo /opt/shtab-ai/shtabctl menu\nTerminal=true\nIcon=utilities-terminal\n')
         manager.chmod(0o755)
         os.chown(manager, account.pw_uid, account.pw_gid)
         manager_record = str(manager)

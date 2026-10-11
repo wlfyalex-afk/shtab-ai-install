@@ -10,7 +10,7 @@ import re
 import subprocess
 import uuid
 
-ROOT = Path('/opt/shtab-ai-021')
+ROOT = Path('/opt/shtab-ai')
 
 
 def redact(text):
@@ -49,8 +49,8 @@ def report(root=ROOT):
         ('Журнал установки', ['journalctl', '-u', 'shtab-ai-install', '-n', '300', '--no-pager']),
         ('Состояние контейнеров', dc + ['ps', '-a']),
         ('Ресурсы контейнеров', ['docker', 'stats', '--no-stream', '--format', '{{.Name}}: CPU={{.CPUPerc}} RAM={{.MemUsage}}',
-                                  'shtab-ai-021-web-1', 'shtab-ai-021-meeting-worker-1',
-                                  'shtab-ai-021-llm-worker-1', 'shtab-ai-021-brief-worker-1']),
+                                  'shtab-ai-web-1', 'shtab-ai-meeting-worker-1',
+                                  'shtab-ai-llm-worker-1', 'shtab-ai-brief-worker-1']),
         ('Журнал приложения за 2 часа', dc + ['logs', '--no-color', '--since', '2h', '--tail', '100',
                                              'web', 'meeting-worker', 'llm-worker', 'brief-worker', 'proxy']),
     ]

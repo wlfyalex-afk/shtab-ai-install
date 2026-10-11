@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Run with sudo'; exit 1; }
-cd /opt/shtab-ai-021
+cd /opt/shtab-ai
 dc() { bash scripts/dc.sh "$@"; }
 action=${1:-}
 if [[ -z $action ]]; then
@@ -9,24 +9,24 @@ if [[ -z $action ]]; then
 fi
 case $action in
 menu) exec bash scripts/menu.sh ;;
-backup|backups|restore|reset-db) python3 scripts/admin021.py "$action" "${@:2}" ;;
+backup|backups|restore|reset-db) python3 scripts/admin.py "$action" "${@:2}" ;;
 uninstall) bash uninstall.sh "${2:---keep-data}" ;;
 progress) python3 scripts/install-progress.py "${@:2}" ;;
 monitor) exec bash scripts/monitor-install.sh "${@:2}" ;;
 status)
-    cat /var/lib/shtab-ai-021/status 2>/dev/null || true
+    cat /var/lib/shtab-ai/status 2>/dev/null || true
     systemctl show shtab-ai-install.service -p ActiveState -p SubState -p Result
     if command -v docker >/dev/null; then dc ps; fi
     ;;
 https-check) bash scripts/check-https.sh ;;
 certificate)
     owned_ca=false
-    system_ca=/usr/local/share/ca-certificates/shtab-ai-021.crt
+    system_ca=/usr/local/share/ca-certificates/shtab-ai.crt
     if [[ -f $system_ca && -f shtab-ai-root.crt ]] && cmp -s "$system_ca" shtab-ai-root.crt; then owned_ca=true; fi
     install -m 0644 tls-data/caddy/pki/authorities/local/root.crt shtab-ai-root.crt
     if $owned_ca; then install -m 0644 shtab-ai-root.crt "$system_ca"; update-ca-certificates; fi
     openssl x509 -in shtab-ai-root.crt -noout -fingerprint -sha256
-    echo "Public root certificate: /opt/shtab-ai-021/shtab-ai-root.crt"
+    echo "Public root certificate: /opt/shtab-ai/shtab-ai-root.crt"
     ;;
 diagnose) bash scripts/diagnose.sh ;;
 support) python3 scripts/support-report.py ;;
@@ -37,8 +37,8 @@ resume)
     ;;
 finish) exec bash scripts/finish-install.sh ;;
 bootstrap)
-    [[ $(cat /var/lib/shtab-ai-021/status) == READY_FOR_ADMIN ]] || { echo 'Wait for READY_FOR_ADMIN'; exit 1; }
-    dc exec web python bootstrap021.py
+    [[ $(cat /var/lib/shtab-ai/status) == READY_FOR_ADMIN ]] || { echo 'Wait for READY_FOR_ADMIN'; exit 1; }
+    dc exec web python bootstrap.py
     ;;
 check)
     dc exec -T web python manage.py check

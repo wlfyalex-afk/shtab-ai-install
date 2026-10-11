@@ -8,7 +8,7 @@ import time
 class Reporter:
     def __init__(self, model, path=None):
         self.model = model
-        self.path = Path(path or os.environ.get('SHTAB_PROGRESS_FILE', f'/var/lib/shtab-ai-021/{model}-progress.json'))
+        self.path = Path(path or os.environ.get('SHTAB_PROGRESS_FILE', f'/var/lib/shtab-ai/{model}-progress.json'))
         self.previous = None
         self.last_write = 0
 

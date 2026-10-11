@@ -1,7 +1,7 @@
-name: shtab-ai-021
+name: shtab-ai
 
 x-app: &app
-  image: shtab-ai-021-app:0.21.0-rc3
+  image: shtab-ai-app:local
   build:
     context: ./app
   restart: unless-stopped

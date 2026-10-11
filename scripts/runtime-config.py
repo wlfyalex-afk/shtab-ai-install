@@ -46,6 +46,6 @@ def reconcile(root, endpoint, host, status):
 
 
 if __name__ == '__main__':
-    root = Path('/opt/shtab-ai-021')
-    state = Path('/var/lib/shtab-ai-021/status')
+    root = Path('/opt/shtab-ai')
+    state = Path('/var/lib/shtab-ai/status')
     print(reconcile(root, sys.argv[1], sys.argv[2], state.read_text().strip() if state.exists() else ''))

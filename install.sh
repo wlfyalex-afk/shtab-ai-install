@@ -11,7 +11,7 @@ minimum_memory=10000000
 if [[ -n ${SHTAB_EXTERNAL_OLLAMA_ENDPOINT:-} ]]; then minimum_memory=8000000; fi
 [[ $mem -ge $minimum_memory ]] || { echo "Requires at least $minimum_memory KiB RAM (8 GB with host Ollama; otherwise 10 GB)"; exit 1; }
 space_target=/opt
-[[ ! -f /opt/shtab-ai-021/storage.json ]] || space_target=/opt/shtab-ai-021
+[[ ! -f /opt/shtab-ai/storage.json ]] || space_target=/opt/shtab-ai
 free=$(df -Pk "$space_target" | awk 'NR==2 {print $4}')
 [[ $free -ge 31457280 ]] || { echo 'Requires at least 30 GiB free in /opt'; exit 1; }
 install_state=$(systemctl show shtab-ai-install.service -p ActiveState --value 2>/dev/null || true)
@@ -23,10 +23,17 @@ src=$(cd "$(dirname "$0")" && pwd)
 for font in DejaVuSans.ttf DejaVuSans-Bold.ttf; do
     [[ -s "$src/app/vendor0184/$font" ]] || { echo "Missing PDF font: $font"; exit 1; }
 done
-dst=/opt/shtab-ai-021
+# Detect numbered layouts before creating any new resources; keep them intact.
+for previous in /opt/shtab-ai-[0-9][0-9][0-9]; do
+    if [[ -d $previous ]]; then
+        echo 'Обнаружена прежняя установка Штаб.AI. Сохраните нужные данные и выполните команду удаления из инструкции; кэш и резервные копии сохранятся.'
+        exit 1
+    fi
+done
+dst=/opt/shtab-ai
 if [[ ! -e $dst/installation-created ]] && command -v docker >/dev/null; then
     docker info >/dev/null 2>&1 || { echo 'Existing Docker is unavailable; start it before installing.'; exit 1; }
-    if [[ -n $(docker ps -aq --filter label=com.docker.compose.project=shtab-ai-021) || -n $(docker volume ls -q --filter name=shtab-ai-021_) ]]; then
+    if [[ -n $(docker ps -aq --filter label=com.docker.compose.project=shtab-ai) || -n $(docker volume ls -q --filter name=shtab-ai_) ]]; then
         echo 'Resources from an earlier installation exist. Remove that installation before a clean install.'; exit 1
     fi
 fi
@@ -42,7 +49,7 @@ if [[ ! -d $dst/tls-data && -z ${SHTAB_HTTPS_PORT:-} ]]; then
         fi
     done
 fi
-mkdir -p "$dst" /var/lib/shtab-ai-021
+mkdir -p "$dst" /var/lib/shtab-ai
 if [[ $src != "$dst" ]]; then
     cp -a "$src/app" "$src/database" "$src/scripts" "$src/compose.yaml" "$src/shtabctl" "$src/uninstall.sh" "$src/https" "$dst/"
     cp "$src/Uninstall-ShtabAI-Ubuntu.sh" "$dst/scripts/full-uninstall.sh"
@@ -106,7 +113,7 @@ python3 "$dst/scripts/model_cache.py" "$dst" "${SHTAB_MODEL_CACHE:-}"
 chmod 755 "$dst/shtabctl" "$dst/scripts/provision.sh"
 cat > /etc/systemd/system/shtab-ai-install.service <<EOF
 [Unit]
-Description=Shtab.AI 021 provisioning
+Description=Shtab.AI provisioning
 Wants=network-online.target
 After=network-online.target
 [Service]
@@ -124,5 +131,5 @@ fi
 systemctl start --no-block shtab-ai-install.service
 echo 'Background installation started.'
 echo 'Follow: sudo journalctl -fu shtab-ai-install'
-echo 'Status: sudo /opt/shtab-ai-021/shtabctl status'
-echo 'Progress: sudo /opt/shtab-ai-021/shtabctl progress'
+echo 'Status: sudo /opt/shtab-ai/shtabctl status'
+echo 'Progress: sudo /opt/shtab-ai/shtabctl progress'

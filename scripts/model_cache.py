@@ -19,7 +19,7 @@ def default_cache(root):
     metadata = root / 'storage.json'
     if metadata.is_file():
         selected = Path(json.loads(metadata.read_text())['root'])
-        if selected != Path('/opt/shtab-ai-021'):
+        if selected != Path('/opt/shtab-ai'):
             return selected.with_name(selected.name + '-cache')
     return Path('/var/cache/shtab-ai')
 

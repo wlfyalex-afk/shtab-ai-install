@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local maintenance of one existing Shtab.AI 021 installation."""
+"""Local maintenance of one existing Shtab.AI installation."""
 import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -8,6 +8,7 @@ import hashlib
 import gzip
 import json
 import os
+import re
 from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
@@ -17,9 +18,9 @@ import tempfile
 import threading
 import time
 
-ROOT = Path('/opt/shtab-ai-021')
-BACKUPS = Path((ROOT/'backup-directory').read_text().strip()) if (ROOT/'backup-directory').is_file() else Path('/var/backups/shtab-ai-021')
-STATE = Path('/var/lib/shtab-ai-021')
+ROOT = Path('/opt/shtab-ai')
+BACKUPS = Path((ROOT/'backup-directory').read_text().strip()) if (ROOT/'backup-directory').is_file() else Path('/var/backups/shtab-ai')
+STATE = Path('/var/lib/shtab-ai')
 WRITERS = ('proxy', 'web', 'meeting-worker', 'llm-worker', 'brief-worker')
 PAYLOADS = ('database.dump', 'app-data.tar.gz', 'configuration.tar.gz')
 IDLE_SQL = """SELECT
@@ -171,7 +172,8 @@ def verify_backup(path):
     if not path.is_dir() or not (path/'manifest.json').is_file():
         raise ValueError('Укажите КАТАЛОГ резервной копии с manifest.json, database.dump и архивами, а не каталог приложения.')
     meta = json.loads((path/'manifest.json').read_text())
-    if meta.get('format') != 'shtab-ai-021-backup-v1' or meta.get('project') != 'shtab-ai-021':
+    project = meta.get('project', '')
+    if not isinstance(project, str) or not re.fullmatch(r'shtab-ai(?:-[0-9]{3})?', project) or meta.get('format') != project + '-backup-v1':
         raise ValueError('Unsupported backup format/project')
     if not isinstance(meta.get('sha256'), dict) or not isinstance(meta.get('schema_sha256'), str):
         raise ValueError('Incomplete backup manifest')
@@ -190,9 +192,9 @@ def ensure_idle():
 
 def check_resources():
     project = json.loads(dc('config', '--format', 'json', capture_output=True, text=True).stdout)['name']
-    if project != 'shtab-ai-021': raise ValueError('Unexpected Compose project')
+    if project != 'shtab-ai': raise ValueError('Unexpected Compose project')
     for key in ('db_data', 'app_data'):
-        result = command(['docker', 'volume', 'inspect', 'shtab-ai-021_'+key], capture_output=True, text=True)
+        result = command(['docker', 'volume', 'inspect', 'shtab-ai_'+key], capture_output=True, text=True)
         labels = json.loads(result.stdout)[0].get('Labels') or {}
         if labels.get('com.docker.compose.project') != project or labels.get('com.docker.compose.volume') != key:
             raise ValueError('Unexpected volume ownership: '+key)
@@ -277,7 +279,7 @@ def transfer_process(args, source=None, target=None, progress=None):
 
 def volume_archive(destination):
     args = ['docker', 'run', '--rm', '--pull', 'never', '--network', 'none',
-            '-v', 'shtab-ai-021_app_data:/data:ro',
+            '-v', 'shtab-ai_app_data:/data:ro',
             'alpine:3.20', 'tar', '-cf', '-', '-C', '/data', '.']
     # Two passes give the exact tar stream size, including headers/padding,
     # without guessing the final compressed size. Writers remain stopped.
@@ -318,7 +320,7 @@ def make_backup(destination=None):
     configuration_archive(destination)
     print('[5/6] Проверка архивов и вычисление контрольных сумм', flush=True)
     for name in PAYLOADS[1:]: validate_tar(destination/name)
-    meta = dict(format='shtab-ai-021-backup-v1', project='shtab-ai-021', created_at=datetime.now(timezone.utc).isoformat(),
+    meta = dict(format='shtab-ai-backup-v1', project='shtab-ai', created_at=datetime.now(timezone.utc).isoformat(),
                 schema_sha256=sha(ROOT/'database/schema-ubuntu.sql'), sha256={name:sha(destination/name) for name in PAYLOADS})
     if isinstance(stream_size, int): meta['app_data_stream_bytes'] = stream_size
     (destination/'manifest.json').write_text(json.dumps(meta, indent=2)+'\n')
@@ -330,7 +332,7 @@ def make_backup(destination=None):
 
 
 def clear_or_restore_files(source=None):
-    args = ['docker', 'run', '--rm', '--pull', 'never', '--network', 'none', '-v', 'shtab-ai-021_app_data:/data']
+    args = ['docker', 'run', '--rm', '--pull', 'never', '--network', 'none', '-v', 'shtab-ai_app_data:/data']
     script = 'find /data -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; '
     if source: script += 'tar -xf - -C /data; '
     script += 'mkdir -p /data/meeting-imports /data/response-evidence /data/evidence /data/logs; chown -R 10001:10001 /data'
@@ -358,14 +360,14 @@ def destructive(kind, source=None):
         print(f'Выбрана резервная копия: {source}\nПроверяем её до изменения данных...', flush=True)
         source, meta = verify_backup(source)
         if meta['schema_sha256'] != sha(ROOT/'database/schema-ubuntu.sql'):
-            raise ValueError('Schema differs; restore requires the same 021 schema')
+            raise ValueError('Schema differs; restore requires the same database schema')
         # Inspect dump before any data changes.
         with Progress('Проверка дампа для восстановления'), (source/'database.dump').open('rb') as f:
             dc('exec', '-T', 'db', 'pg_restore', '--list', stdin=f, stdout=subprocess.DEVNULL)
         size = sum((source/name).stat().st_size for name in PAYLOADS)
-        word, message = 'RESTORE-SHTAB-021', f'Копия: {source}\nСоздана (UTC): {meta.get("created_at", "не указано")}\nРазмер файлов копии: {human_size(size)}\nТекущая БД, пользователи и записи будут заменены этой копией.\nСначала будет сохранена текущая версия. Ключи HTTPS будут восстановлены; пароли подключения к БД и .env останутся текущими.'
+        word, message = 'RESTORE-SHTAB', f'Копия: {source}\nСоздана (UTC): {meta.get("created_at", "не указано")}\nРазмер файлов копии: {human_size(size)}\nТекущая БД, пользователи и записи будут заменены этой копией.\nСначала будет сохранена текущая версия. Ключи HTTPS будут восстановлены; пароли подключения к БД и .env останутся текущими.'
     else:
-        word, message = 'CLEAR-SHTAB-021', 'Будут удалены ВСЕ данные БД, включая пользователей и организации, и загруженные записи.\nМодели, схема БД и сертификаты сохранятся. Сначала будет создана резервная копия.'
+        word, message = 'CLEAR-SHTAB', 'Будут удалены ВСЕ данные БД, включая пользователей и организации, и загруженные записи.\nМодели, схема БД и сертификаты сохранятся. Сначала будет создана резервная копия.'
     if not confirm(word, message): return
     ensure_idle()
     running = dc('ps', '--services', '--status', 'running', capture_output=True, text=True).stdout.split()

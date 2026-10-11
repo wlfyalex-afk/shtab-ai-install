@@ -2,7 +2,22 @@
 # Fully delete only this application's resources; shared Docker/drivers stay installed.
 set -euo pipefail
 if [[ $EUID -ne 0 ]]; then exec sudo bash "$(readlink -f "${BASH_SOURCE[0]}")" "$@"; fi
-root=/opt/shtab-ai-021
+root=/opt/shtab-ai
+project=shtab-ai
+# A downloaded uninstaller also recognises previous numbered layouts.
+previous=()
+for candidate in /opt/shtab-ai-[0-9][0-9][0-9]; do
+    [[ ! -d $candidate ]] || previous+=("$candidate")
+done
+if [[ -d $root && ${#previous[@]} -gt 0 ]] || [[ ${#previous[@]} -gt 1 ]]; then
+    echo 'Найдено несколько установок. Удалите нужную через её меню; автоматический выбор остановлен.'
+    exit 1
+fi
+if [[ ! -d $root && ${#previous[@]} == 1 ]]; then
+    root=${previous[0]}
+    project=${root##*/}
+fi
+state=/var/lib/$project
 self=$(readlink -f "${BASH_SOURCE[0]}")
 # The manager may run this file from the mount being removed. Release its open script descriptor first.
 if [[ $self == "$root/"* ]]; then
@@ -19,35 +34,42 @@ selected=$root
 mount_unit=''
 if [[ -f $root/storage.json ]]; then
     python3 "$root/scripts/configure-storage.py" verify
-    selected=$(python3 -c 'import json; print(json.load(open("/opt/shtab-ai-021/storage.json"))["root"])')
-    mount_unit=$(python3 -c 'import json; print(json.load(open("/opt/shtab-ai-021/storage.json"))["mount_unit"])')
+    selected=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["root"])' "$root/storage.json")
+    mount_unit=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["mount_unit"])' "$root/storage.json")
 fi
 if find "$root" -type l -print -quit | read -r _; then echo 'В каталоге есть символические ссылки. Автоматическое удаление остановлено.'; exit 1; fi
 volumes=()
+images=()
 if command -v docker >/dev/null && ! docker info >/dev/null 2>&1; then
     echo 'Docker недоступен. Запустите Docker и повторите удаление: контейнеры и данные пока сохранены.'; exit 1
 fi
 if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
     for key in db_data app_data asr_models ollama_models; do
-        name="shtab-ai-021_$key"
+        name="${project}_$key"
         if docker volume inspect "$name" >/dev/null 2>&1; then
             label=$(docker volume inspect "$name" --format '{{ index .Labels "com.docker.compose.project" }}:{{ index .Labels "com.docker.compose.volume" }}')
-            [[ $label == "shtab-ai-021:$key" ]] || { echo "Неожиданный владелец тома: $name"; exit 1; }
+            [[ $label == "$project:$key" ]] || { echo "Неожиданный владелец тома: $name"; exit 1; }
             volumes+=("$name")
         fi
     done
-    if [[ -f $root/compose.yaml ]]; then bash "$root/scripts/dc.sh" config --quiet; fi
+    if [[ -f $root/compose.yaml ]]; then
+        bash "$root/scripts/dc.sh" config --quiet
+        image_list=$(bash "$root/scripts/dc.sh" --profile '*' config --images)
+        while IFS= read -r image; do
+            [[ $image != "$project-app:"* ]] || images+=("$image")
+        done <<< "$image_list"
+    fi
 fi
 echo 'Будут удалены Штаб.AI, пользователи, записи, результаты и данные внутри папки приложения. Резервная копия не создаётся.
 Постоянный кэш моделей вне приложения и ранее созданные резервные копии сохраняются.'
-read -r -p 'Для полного удаления введите DELETE-SHTAB-021: ' answer
-[[ $answer == DELETE-SHTAB-021 ]] || { echo 'Отменено.'; exit 0; }
+read -r -p 'Для полного удаления введите DELETE-SHTAB: ' answer
+[[ $answer == DELETE-SHTAB ]] || { echo 'Отменено.'; exit 0; }
 systemctl stop shtab-ai-install.service 2>/dev/null || true
 if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
     if [[ -f $root/compose.yaml ]]; then bash "$root/scripts/dc.sh" --profile '*' down --remove-orphans; fi
     if [[ ${#volumes[@]} -gt 0 ]]; then docker volume rm "${volumes[@]}"; fi
     # Remove only the application image when no remaining container references it.
-    for image in shtab-ai-021-app:0.21.0-rc3 shtab-ai-021-app:0.21.0-rc3-nvidia; do
+    for image in "${images[@]}"; do
         if docker image inspect "$image" >/dev/null 2>&1 && [[ -z $(docker ps -aq --filter "ancestor=$image") ]]; then
             docker image rm "$image" || true
         fi
@@ -73,9 +95,9 @@ if metadata.exists():
     if record.get('manager'):
         manager=Path(record['manager'])
         if manager.name=='ShtabAI-Manager.desktop' and manager.is_file() and not manager.is_symlink():
-            if '\nExec=sudo /opt/shtab-ai-021/shtabctl menu\n' in manager.read_text(): manager.unlink()
+            if '\nExec=sudo '+str(root)+'/shtabctl menu\n' in manager.read_text(): manager.unlink()
 PY
-certificate=/usr/local/share/ca-certificates/shtab-ai-021.crt
+certificate=/usr/local/share/ca-certificates/$project.crt
 if [[ -f $certificate && -f $root/shtab-ai-root.crt ]] && cmp -s "$certificate" "$root/shtab-ai-root.crt"; then
     rm -f "$certificate"
     update-ca-certificates
@@ -90,7 +112,7 @@ if [[ -n $mount_unit ]]; then
     [[ -f $selected/storage.json && -d $selected/storage ]] || { echo 'Нельзя подтвердить каталог данных после отключения mount.'; exit 1; }
     rm -rf -- "$selected"
 else
-    rm -rf -- /opt/shtab-ai-021
+    rm -rf -- "$root"
 fi
-rm -rf -- /var/lib/shtab-ai-021
+rm -rf -- "$state"
 echo 'Штаб.AI полностью удалён. Постоянный кэш моделей вне приложения, резервные копии, Docker, драйверы и другие приложения сохранены.'

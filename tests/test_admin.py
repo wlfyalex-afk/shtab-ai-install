@@ -13,7 +13,7 @@ import gzip
 import shutil
 from unittest.mock import patch
 
-SCRIPT = Path(__file__).resolve().parents[1]/'scripts/admin021.py'
+SCRIPT = Path(__file__).resolve().parents[1]/'scripts/admin.py'
 
 
 def module():
@@ -39,7 +39,7 @@ class MaintenanceTests(unittest.TestCase):
         self.m.STATE = self.base/'state'
         self.m.BACKUPS = self.base/'backups'
         for path in (self.m.ROOT/'database', self.m.STATE, self.m.BACKUPS): path.mkdir(parents=True)
-        (self.m.ROOT/'database/schema-ubuntu.sql').write_text('schema021')
+        (self.m.ROOT/'database/schema-ubuntu.sql').write_text('schema')
         (self.m.ROOT/'.env').write_text('current-settings')
         (self.m.ROOT/'secrets').mkdir()
         (self.m.ROOT/'secrets/db_password').write_text('current-secret')
@@ -76,6 +76,18 @@ class MaintenanceTests(unittest.TestCase):
         (path/'database.dump').write_bytes(b'corrupted')
         with self.assertRaisesRegex(ValueError,'integrity'): self.m.verify_backup(path)
 
+    def test_previous_numbered_backup_format_remains_readable(self):
+        path = self.snapshot()
+        file = path/'manifest.json'
+        meta = json.loads(file.read_text())
+        meta.update(project='shtab-ai-019', format='shtab-ai-019-backup-v1')
+        file.write_text(json.dumps(meta))
+        self.m.verify_backup(path)
+        meta['project'] = 'another-project'
+        file.write_text(json.dumps(meta))
+        with self.assertRaisesRegex(ValueError, 'format/project'):
+            self.m.verify_backup(path)
+
     def test_archive_rejects_escape_and_symlinks(self):
         path = self.base/'bad.tar.gz'
         archive(path,'../../escape')
@@ -90,7 +102,7 @@ class MaintenanceTests(unittest.TestCase):
         self.assertEqual(self.calls,[])
 
     def test_failed_safety_backup_resumes_services_without_reset(self):
-        with patch('builtins.input',return_value='CLEAR-SHTAB-021'), patch.object(self.m,'ensure_idle'), patch.object(self.m,'dc',self.dc), patch.object(self.m,'make_backup',side_effect=OSError('disk full')), patch.object(self.m,'sql') as sql, patch.object(self.m,'clear_or_restore_files') as files:
+        with patch('builtins.input',return_value='CLEAR-SHTAB'), patch.object(self.m,'ensure_idle'), patch.object(self.m,'dc',self.dc), patch.object(self.m,'make_backup',side_effect=OSError('disk full')), patch.object(self.m,'sql') as sql, patch.object(self.m,'clear_or_restore_files') as files:
             with self.assertRaises(OSError): self.m.destructive('reset')
         sql.assert_not_called();files.assert_not_called()
         self.assertEqual(self.calls[-1][0],'start')
@@ -103,7 +115,7 @@ class MaintenanceTests(unittest.TestCase):
                 self.calls.append(args)
                 raise subprocess.CalledProcessError(1,args)
             return self.dc(*args,**kwargs)
-        with patch('builtins.input',return_value='RESTORE-SHTAB-021'), patch.object(self.m,'ensure_idle'), patch.object(self.m,'dc',failing), patch.object(self.m,'transfer_process',self.transfer_dc), patch.object(self.m,'make_backup',return_value=self.base/'safety'), patch.object(self.m,'clear_or_restore_files') as files:
+        with patch('builtins.input',return_value='RESTORE-SHTAB'), patch.object(self.m,'ensure_idle'), patch.object(self.m,'dc',failing), patch.object(self.m,'transfer_process',self.transfer_dc), patch.object(self.m,'make_backup',return_value=self.base/'safety'), patch.object(self.m,'clear_or_restore_files') as files:
             with self.assertRaises(subprocess.CalledProcessError): self.m.destructive('restore',source)
         files.assert_not_called()
         self.assertNotIn('start',[args[0] for args in self.calls])
@@ -113,7 +125,7 @@ class MaintenanceTests(unittest.TestCase):
         source = self.snapshot()
         (self.m.ROOT/'tls-data/root.crt').write_text('different-ca')
         self.calls=[]
-        with patch('builtins.input',return_value='RESTORE-SHTAB-021'), patch.object(self.m,'ensure_idle'), patch.object(self.m,'dc',self.dc), patch.object(self.m,'transfer_process',self.transfer_dc), patch.object(self.m,'make_backup',return_value=self.base/'safety'), patch.object(self.m,'clear_or_restore_files') as files, patch.object(self.m,'command') as certificate:
+        with patch('builtins.input',return_value='RESTORE-SHTAB'), patch.object(self.m,'ensure_idle'), patch.object(self.m,'dc',self.dc), patch.object(self.m,'transfer_process',self.transfer_dc), patch.object(self.m,'make_backup',return_value=self.base/'safety'), patch.object(self.m,'clear_or_restore_files') as files, patch.object(self.m,'command') as certificate:
             self.m.destructive('restore',source)
         certificate.assert_called_once_with(['bash',str(self.m.ROOT/'shtabctl'),'certificate'])
         files.assert_called_once_with(source)
@@ -123,7 +135,7 @@ class MaintenanceTests(unittest.TestCase):
         self.assertEqual(self.calls[-1][0],'start')
 
     def test_reset_preserves_tls_and_requests_new_admin(self):
-        with patch('builtins.input',return_value='CLEAR-SHTAB-021'), patch.object(self.m,'ensure_idle'), patch.object(self.m,'dc',self.dc), patch.object(self.m,'make_backup',return_value=self.base/'safety'), patch.object(self.m,'sql') as sql, patch.object(self.m,'clear_or_restore_files') as files:
+        with patch('builtins.input',return_value='CLEAR-SHTAB'), patch.object(self.m,'ensure_idle'), patch.object(self.m,'dc',self.dc), patch.object(self.m,'make_backup',return_value=self.base/'safety'), patch.object(self.m,'sql') as sql, patch.object(self.m,'clear_or_restore_files') as files:
             self.m.destructive('reset')
         sql.assert_called_once_with(self.m.RESET_SQL)
         files.assert_called_once_with()
