@@ -119,7 +119,7 @@ scripts/check-https.sh,Обслуживание и запуск,.sh,59,59
 scripts/configure-acceleration.py,Установка,.py,41,35
 scripts/configure-https.py,Установка,.py,59,53
 scripts/configure-storage.py,Установка,.py,89,76
-scripts/create-desktop-shortcut.py,Установка,.py,73,69
+scripts/create-desktop-shortcut.py,Установка,.py,100,94
 scripts/dc.sh,Обслуживание и запуск,.sh,10,10
 scripts/diagnose.sh,Обслуживание и запуск,.sh,21,20
 scripts/download-asr.py,Установка,.py,130,127
@@ -142,7 +142,7 @@ scripts/resume-install.sh,Обслуживание и запуск,.sh,37,37
 scripts/runtime-config.py,Обслуживание и запуск,.py,51,47
 scripts/support-report.py,Обслуживание и запуск,.py,97,86
 scripts/worker-loop.py,Обслуживание и запуск,.py,43,42
-shtabctl,Обслуживание и запуск,.sh,56,56
+shtabctl,Обслуживание и запуск,.sh,63,63
 tests/Test-BootstrapDownload.ps1,Тесты поставки,.ps1,48,48
 tests/Test-CleanupPaths.ps1,Тесты поставки,.ps1,68,67
 tests/Test-DownloadCache.ps1,Тесты поставки,.ps1,36,36
@@ -159,7 +159,7 @@ tests/test_acceleration.py,Тесты поставки,.py,66,55
 tests/test_admin.py,Тесты поставки,.py,270,240
 tests/test_bootstrap_input.py,Тесты поставки,.py,36,30
 tests/test_cloud_download_timing.py,Тесты поставки,.py,66,59
-tests/test_desktop_shortcut.py,Тесты поставки,.py,62,54
+tests/test_desktop_shortcut.py,Тесты поставки,.py,82,72
 tests/test_finish_install.py,Тесты поставки,.py,131,117
 tests/test_gpu_fallback.py,Тесты поставки,.py,59,53
 tests/test_install_operation.py,Тесты поставки,.py,100,90

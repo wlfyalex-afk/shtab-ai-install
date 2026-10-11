@@ -6,6 +6,32 @@ from pathlib import Path
 import pwd
 import subprocess
 import sys
+import tempfile
+
+
+def export_certificate(root, account):
+    source = root / 'shtab-ai-root.crt'
+    if not source.is_file():
+        print('Публичный сертификат ещё не создан. Выполните sudo /opt/shtab-ai/shtabctl certificate.')
+        return
+    destination = Path(account.pw_dir) / 'shtab-ai-root.crt'
+    if destination.is_symlink():
+        print(f'Путь сертификата является ссылкой; копирование остановлено: {destination}')
+        return
+    # Replace atomically without following a user-controlled destination link.
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=account.pw_dir, prefix='.shtab-certificate-', delete=False) as out:
+            temporary = Path(out.name)
+            out.write(source.read_bytes())
+            os.fchmod(out.fileno(), 0o644)
+            os.fchown(out.fileno(), account.pw_uid, account.pw_gid)
+        os.replace(temporary, destination)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    print(f'Сертификат для импорта в браузер: {destination}')
+    return destination
 
 
 def create(root, user):
@@ -13,6 +39,7 @@ def create(root, user):
         print('Нет пользователя рабочего стола. Адрес входа показан в терминале.')
         return
     account = pwd.getpwnam(user)
+    export_certificate(root, account)
     home = Path(account.pw_dir)
     # xdg-user-dir requires the real user's HOME and should not inherit root's XDG paths.
     env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / '.config'))

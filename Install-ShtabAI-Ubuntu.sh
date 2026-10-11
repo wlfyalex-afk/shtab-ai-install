@@ -228,7 +228,7 @@ mode=$(cat acceleration)
 access=$(cat access-mode 2>/dev/null || echo local)
 echo "Настройка завершена. Откройте в браузере: https://$host/login. Режим: $mode."
 if [[ $access == lan ]]; then
-    echo 'На других ПК добавьте в доверенные публичный сертификат /opt/shtab-ai/shtab-ai-root.crt.'
+    echo 'На других ПК добавьте в доверенные публичный сертификат shtab-ai-root.crt из домашней папки пользователя.'
     echo 'Доступ с другого ПК и доверие его браузера проверяются отдельно.'
 fi
 clear_pending_input

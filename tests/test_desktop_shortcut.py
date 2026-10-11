@@ -20,6 +20,7 @@ class DesktopShortcutTests(unittest.TestCase):
         self.desktop.mkdir(parents=True)
         self.app = self.base/'app'
         self.app.mkdir()
+        (self.app/'shtab-ai-root.crt').write_text('public certificate')
         (self.app/'.env').write_text('SHTAB_HTTPS_HOST=192.168.10.115\n')
         self.module = runpy.run_path(str(ROOT/'scripts/create-desktop-shortcut.py'))
 
@@ -28,7 +29,7 @@ class DesktopShortcutTests(unittest.TestCase):
 
     def create(self, trusted=True):
         account = types.SimpleNamespace(pw_dir=str(self.home), pw_uid=1000, pw_gid=1000)
-        with patch('pwd.getpwnam', return_value=account), patch('os.chown'), \
+        with patch('pwd.getpwnam', return_value=account), patch('os.chown'), patch('os.fchown'), \
              patch('subprocess.check_output', return_value=str(self.desktop)), \
              patch('subprocess.run', return_value=types.SimpleNamespace(returncode=0 if trusted else 1)) as mark, \
              contextlib.redirect_stdout(io.StringIO()) as output:
@@ -60,3 +61,22 @@ class DesktopShortcutTests(unittest.TestCase):
         self.assertIn('Разрешить запуск', output)
         record = json.loads((self.app/'desktop-shortcut.json').read_text())
         self.assertEqual(record['url'], 'https://192.168.10.115/login')
+
+    def test_exports_public_certificate_without_changing_installation_permissions(self):
+        self.app.chmod(0o700)
+        self.create()
+        certificate = self.home/'shtab-ai-root.crt'
+        self.assertEqual(certificate.read_text(), 'public certificate')
+        self.assertEqual(certificate.stat().st_mode & 0o777, 0o644)
+        self.assertEqual(self.app.stat().st_mode & 0o777, 0o700)
+        (self.app/'shtab-ai-root.crt').write_text('replacement certificate')
+        self.create()
+        self.assertEqual(certificate.read_text(), 'replacement certificate')
+        self.assertEqual(list(self.home.glob('.shtab-certificate-*')), [])
+
+    def test_certificate_symlink_does_not_modify_target(self):
+        target = self.home/'other'
+        target.write_text('keep this')
+        (self.home/'shtab-ai-root.crt').symlink_to(target)
+        self.create()
+        self.assertEqual(target.read_text(), 'keep this')

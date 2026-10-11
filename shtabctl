@@ -27,6 +27,13 @@ certificate)
     if $owned_ca; then install -m 0644 shtab-ai-root.crt "$system_ca"; update-ca-certificates; fi
     openssl x509 -in shtab-ai-root.crt -noout -fingerprint -sha256
     echo "Public root certificate: /opt/shtab-ai/shtab-ai-root.crt"
+    if [[ -n ${SUDO_USER:-} && $SUDO_USER != root ]]; then
+        python3 - "$SUDO_USER" <<'PYCODE'
+from pathlib import Path
+import pwd, runpy, sys
+runpy.run_path('scripts/create-desktop-shortcut.py')['export_certificate'](Path.cwd(), pwd.getpwnam(sys.argv[1]))
+PYCODE
+    fi
     ;;
 diagnose) bash scripts/diagnose.sh ;;
 support) python3 scripts/support-report.py ;;
