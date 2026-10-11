@@ -14,12 +14,20 @@ from werkzeug.security import generate_password_hash
 from store import Store
 
 
+def valid_text(value):
+    try:
+        value.encode('utf-8')
+    except UnicodeEncodeError:
+        return False
+    return not any(ord(c) < 32 or ord(c) == 127 for c in value)
+
+
 def required(prompt, maximum=200):
     while True:
         value = input(prompt).strip()
-        if value and len(value) <= maximum and not any(ord(c) < 32 or ord(c) == 127 for c in value):
+        if value and len(value) <= maximum and valid_text(value):
             return value
-        print(f"Нужно непустое значение до {maximum} символов без управляющих знаков. Повторите ввод.")
+        print(f"Нужно непустое значение до {maximum} символов без управляющих знаков и ошибок кодировки. Повторите ввод.")
 
 
 def credentials():
@@ -32,6 +40,9 @@ def credentials():
         print("Логин: от 3 до 40 символов, начинается с латинской буквы. Повторите ввод.")
     while True:
         timezone = input("Часовой пояс [Asia/Vladivostok]: ").strip() or "Asia/Vladivostok"
+        if not valid_text(timezone):
+            print("Ошибка кодировки часового пояса. Повторите ввод или нажмите Enter.")
+            continue
         try:
             ZoneInfo(timezone)
             break
@@ -39,8 +50,8 @@ def credentials():
             print("Неизвестный часовой пояс. Повторите ввод или нажмите Enter для Asia/Vladivostok.")
     while True:
         password = getpass.getpass("Пароль (не менее 14 символов): ")
-        if not 14 <= len(password) <= 200:
-            print("Нужен пароль от 14 до 200 символов. Повторите ввод.")
+        if not 14 <= len(password) <= 200 or not valid_text(password):
+            print("Нужен пароль от 14 до 200 символов без управляющих знаков и ошибок кодировки. Повторите ввод.")
             continue
         if password == getpass.getpass("Повторите пароль: "):
             break

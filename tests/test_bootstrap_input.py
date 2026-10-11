@@ -34,3 +34,15 @@ class BootstrapInputTests(unittest.TestCase):
         for error in (EOFError, KeyboardInterrupt):
             with patch('builtins.input', side_effect=error), self.assertRaises(error):
                 self.module['required']('Name: ')
+
+    def test_invalid_utf8_bytes_retry_names_before_database_write(self):
+        damaged = b'B\xd0IM-DV'.decode('utf-8', 'surrogateescape')
+        with patch('builtins.input', side_effect=[damaged, 'БИМ-ДВ']), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.module['required']('Name: '), 'БИМ-ДВ')
+
+    def test_surrogates_in_timezone_and_password_retry(self):
+        with patch('builtins.input', side_effect=['Org', 'Admin', 'wlfy', '\udcd0', '']), \
+             patch.object(self.module['credentials'].__globals__['getpass'], 'getpass', side_effect=['x'*14+'\udcd0', 'пароль-длиннее-14', 'пароль-длиннее-14']), \
+             contextlib.redirect_stdout(io.StringIO()):
+            result = self.module['credentials']()
+        self.assertEqual(result, ('Org', 'Admin', 'wlfy', 'Asia/Vladivostok', 'пароль-длиннее-14'))

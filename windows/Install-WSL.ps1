@@ -11,6 +11,7 @@ param(
     [string]$CacheDir = ''
 )
 $ErrorActionPreference = 'Stop'
+[Console]::InputEncoding = New-Object Text.UTF8Encoding($false)
 [Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)
 $OutputEncoding = [Console]::OutputEncoding
 . (Join-Path $PSScriptRoot 'Install-Progress.ps1')

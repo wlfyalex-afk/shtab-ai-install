@@ -1,6 +1,9 @@
 ﻿#Requires -Version 5.1
 param([Parameter(Mandatory=$true)][string]$ManifestPath)
 $ErrorActionPreference='Stop'
+[Console]::InputEncoding = New-Object Text.UTF8Encoding($false)
+[Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)
+$OutputEncoding = [Console]::OutputEncoding
 trap {
     Write-Host ('Диспетчер остановлен: '+$_.Exception.Message) -ForegroundColor Red
     [void](Read-Host 'Нажмите Enter, чтобы закрыть окно')

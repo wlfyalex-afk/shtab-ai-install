@@ -3,6 +3,7 @@
 [CmdletBinding()]
 param([switch]$Resume, [switch]$RestartEarly, [string]$CacheDir = '')
 $ErrorActionPreference = 'Stop'
+[Console]::InputEncoding = New-Object Text.UTF8Encoding($false)
 function Receive-CachedFile {
     param([string]$Uri, [string]$OutFile, [string]$SHA256)
     if ($SHA256 -notmatch '^[a-fA-F0-9]{64}$') { throw 'Нет SHA256 для файла кэша.' }
