@@ -51,6 +51,15 @@ def create_app(settings=None, store=None):
 
     @app.before_request
     def guard():
+        if request.endpoint == 'meeting_transfer.import_meeting':
+            actor = app.store.user(user_id=session['uid']) if session.get('uid') else None
+            if not actor or actor['session_version'] != session.get('sv'):
+                return redirect(url_for('login'))
+            if not actor.get('is_admin') and actor.get('app_role', 'secretary') != 'secretary':
+                abort(403)
+            from meeting_transfer import MAX_PACKAGE
+            request.max_content_length = MAX_PACKAGE
+            request.max_form_memory_size = 1024 * 1024
         if request.endpoint == 'imports.chunk':
             request.max_content_length = 2 * 1024 * 1024
         if request.routing_exception is not None:
@@ -202,4 +211,6 @@ def create_app(settings=None, store=None):
     register_export0183(app)
     from comments_reports0184 import register as register_comments_reports0184
     register_comments_reports0184(app)
+    from meeting_transfer import register as register_transfer
+    register_transfer(app)
     return app

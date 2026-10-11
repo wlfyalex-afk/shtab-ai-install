@@ -21,4 +21,4 @@ USER 10001:10001
 
 EXPOSE 8092
 ENTRYPOINT ["python", "/usr/local/bin/installer-entrypoint.py"]
-CMD ["gunicorn", "--bind", "0.0.0.0:8092", "--workers", "2", "app:create_app()"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8092", "--workers", "2", "--timeout", "300", "app:create_app()"]

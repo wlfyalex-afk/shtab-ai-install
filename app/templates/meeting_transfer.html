@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="panel">
+{% if meeting %}
+<h1>Перенос совещания</h1>
+<p>{{ meeting.title }}</p>
+<p>Архив сохраняет стенограммы, брифы, поручения, черновики, комментарии и карточки связанных исполнителей. Его можно импортировать на Ubuntu или Windows.</p>
+<p>Учётные записи, пароли, телефонные контакты, история звонков и настройки приложения в архив не входят.</p>
+<form method="post">
+<input type="hidden" name="csrf" value="{{ csrf() }}">
+<label><input type="checkbox" name="include_audio" value="yes" checked> Включить аудиозапись для прослушивания</label>
+<p>При недоступном или слишком большом аудио снимите этот флажок. Максимальный размер архива — 2 ГиБ.</p>
+<button type="submit">Скачать архив для переноса</button>
+</form>
+<p><a href="{{ url_for('workflow0182.status',mid=meeting.id) }}">Вернуться к совещанию</a></p>
+{% else %}
+<h1>Импорт совещания</h1>
+<p>Выберите ZIP, созданный командой «Перенести совещание». Обычный ZIP документов и полная резервная копия здесь не подходят.</p>
+<p>Совещание добавится в текущую организацию. Существующие совещания и пользователи сохранятся. Связанные исполнители добавятся отдельными карточками с новыми идентификаторами; совпадающие имена автоматически не объединяются.</p>
+<p>Переносятся результаты обработки без повторного запуска моделей. Максимальный размер архива — 2 ГиБ.</p>
+<form method="post" enctype="multipart/form-data">
+<input type="hidden" name="csrf" value="{{ csrf() }}">
+<label>Архив совещания <input type="file" name="package" accept=".zip" required></label>
+<p><label><input type="checkbox" name="confirm" value="yes" required> Добавить совещание в текущую организацию</label></p>
+<button type="submit">Импортировать совещание</button>
+</form>
+<p><a href="{{ url_for('imports.index') }}">Вернуться к списку совещаний</a></p>
+{% endif %}
+</section>
+{% endblock %}

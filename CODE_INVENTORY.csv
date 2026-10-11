@@ -7,7 +7,7 @@ Start-ShtabAI-Windows.cmd,Установка,.cmd,26,26
 Uninstall-ShtabAI-Ubuntu.sh,Удаление,.sh,133,133
 Uninstall-ShtabAI-Windows.ps1,Удаление,.ps1,162,161
 app/admin010_manage.py,Приложение Python,.py,32,31
-app/app.py,Приложение Python,.py,205,187
+app/app.py,Приложение Python,.py,216,198
 app/automation0183.py,Приложение Python,.py,277,248
 app/bootstrap.py,Приложение Python,.py,103,89
 app/brief_core017.py,Приложение Python,.py,343,309
@@ -49,6 +49,7 @@ app/llm_worker013.py,Приложение Python,.py,106,103
 app/manage.py,Приложение Python,.py,56,54
 app/meeting_import.py,Приложение Python,.py,306,283
 app/meeting_review009.py,Приложение Python,.py,138,127
+app/meeting_transfer.py,Приложение Python,.py,487,456
 app/meeting_worker.py,Приложение Python,.py,343,325
 app/metrics011.py,Приложение Python,.py,40,40
 app/metrics_web011.py,Приложение Python,.py,48,48
@@ -75,7 +76,7 @@ app/static/style.css,Интерфейс HTML/CSS/JS,.css,49,47
 app/static/workflow0182.css,Интерфейс HTML/CSS/JS,.css,1,1
 app/store.py,Приложение Python,.py,124,116
 app/task_drafts009.py,Приложение Python,.py,26,24
-app/templates/_meeting_nav0182.html,Интерфейс HTML/CSS/JS,.html,8,8
+app/templates/_meeting_nav0182.html,Интерфейс HTML/CSS/JS,.html,9,9
 app/templates/_pager0182.html,Интерфейс HTML/CSS/JS,.html,19,19
 app/templates/base.html,Интерфейс HTML/CSS/JS,.html,1,1
 app/templates/brief017.html,Интерфейс HTML/CSS/JS,.html,27,27
@@ -97,6 +98,7 @@ app/templates/login.html,Интерфейс HTML/CSS/JS,.html,1,1
 app/templates/manual_response0181.html,Интерфейс HTML/CSS/JS,.html,7,7
 app/templates/meeting008.html,Интерфейс HTML/CSS/JS,.html,16,16
 app/templates/meeting_status0183.html,Интерфейс HTML/CSS/JS,.html,40,37
+app/templates/meeting_transfer.html,Интерфейс HTML/CSS/JS,.html,30,30
 app/templates/metrics011.html,Интерфейс HTML/CSS/JS,.html,2,2
 app/templates/operations018.html,Интерфейс HTML/CSS/JS,.html,25,25
 app/templates/organizations0102.html,Интерфейс HTML/CSS/JS,.html,1,1
@@ -164,6 +166,7 @@ tests/test_finish_install.py,Тесты поставки,.py,131,117
 tests/test_gpu_fallback.py,Тесты поставки,.py,59,53
 tests/test_install_operation.py,Тесты поставки,.py,100,90
 tests/test_installer.py,Тесты поставки,.py,188,177
+tests/test_meeting_transfer.py,Тесты поставки,.py,231,205
 tests/test_memory_policy.py,Тесты поставки,.py,23,21
 tests/test_menu.py,Тесты поставки,.py,74,64
 tests/test_model_cache.py,Тесты поставки,.py,79,71
