@@ -1,4 +1,6 @@
 ﻿path,category,language,physical_lines,nonempty_lines
+.github/workflows/validate.yml,Автоматизация GitHub Actions,.yml,100,99
+.github/workflows/windows-launcher.yml,Автоматизация GitHub Actions,.yml,36,36
 Cleanup-ShtabAI-RU.ps1,Удаление,.ps1,177,176
 Install-ShtabAI-RU.ps1,Установка,.ps1,846,831
 Install-ShtabAI-Ubuntu.sh,Установка,.sh,237,235
