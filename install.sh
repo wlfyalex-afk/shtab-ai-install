@@ -47,6 +47,10 @@ if [[ $src != "$dst" ]]; then
     cp -a "$src/app" "$src/database" "$src/scripts" "$src/compose.yaml" "$src/shtabctl" "$src/uninstall.sh" "$src/https" "$dst/"
     cp "$src/Uninstall-ShtabAI-Ubuntu.sh" "$dst/scripts/full-uninstall.sh"
 fi
+# The public bootstrap uses umask 077 while unpacking. Only runtime code and
+# public configuration may be read by non-root users inside the containers.
+# Keep .env, secrets and user data out of this permission adjustment.
+chmod -R a+rX "$dst/app" "$dst/database" "$dst/scripts" "$dst/https"
 install -d -m 0700 "$dst/secrets"
 python3 - "$dst" <<'PY'
 from pathlib import Path
