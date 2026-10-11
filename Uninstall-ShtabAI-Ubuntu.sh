@@ -44,7 +44,7 @@ read -r -p 'Для полного удаления введите DELETE-SHTAB-0
 [[ $answer == DELETE-SHTAB-021 ]] || { echo 'Отменено.'; exit 0; }
 systemctl stop shtab-ai-install.service 2>/dev/null || true
 if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
-    if [[ -f $root/compose.yaml ]]; then bash "$root/scripts/dc.sh" down --remove-orphans; fi
+    if [[ -f $root/compose.yaml ]]; then bash "$root/scripts/dc.sh" --profile '*' down --remove-orphans; fi
     if [[ ${#volumes[@]} -gt 0 ]]; then docker volume rm "${volumes[@]}"; fi
     # Remove only the application image when no remaining container references it.
     for image in shtab-ai-021-app:0.21.0-rc3 shtab-ai-021-app:0.21.0-rc3-nvidia; do
