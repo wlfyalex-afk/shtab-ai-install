@@ -31,7 +31,11 @@ certificate)
 diagnose) bash scripts/diagnose.sh ;;
 support) python3 scripts/support-report.py ;;
 logs) journalctl -u shtab-ai-install -n 100 --no-pager ;;
-resume) bash scripts/resume-install.sh ;;
+resume)
+    bash scripts/resume-install.sh
+    exec bash scripts/finish-install.sh --wait
+    ;;
+finish) exec bash scripts/finish-install.sh ;;
 bootstrap)
     [[ $(cat /var/lib/shtab-ai-021/status) == READY_FOR_ADMIN ]] || { echo 'Wait for READY_FOR_ADMIN'; exit 1; }
     dc exec web python bootstrap021.py
@@ -48,5 +52,5 @@ stop) dc stop proxy web meeting-worker llm-worker brief-worker ollama ;;
 start)
     if ! grep -q '^SHTAB_OLLAMA_ENDPOINT=' .env; then dc up -d --wait --wait-timeout 240 ollama; fi
     dc up -d --wait --wait-timeout 240 web meeting-worker llm-worker brief-worker proxy ;;
-*) echo 'Commands: menu, backup, backups, restore, reset-db, uninstall, certificate, https-check, status, progress, monitor, diagnose, support, logs, resume, bootstrap, check, stop, start'; exit 2 ;;
+*) echo 'Commands: menu, backup, backups, restore, reset-db, uninstall, certificate, https-check, status, progress, monitor, diagnose, support, logs, resume, finish, bootstrap, check, stop, start'; exit 2 ;;
 esac

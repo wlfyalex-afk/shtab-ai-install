@@ -115,7 +115,11 @@ def main():
                     stage_seconds = 0
                 lines.append(f'Время этапа: {elapsed(stage_seconds)} | Время просмотра: {elapsed(time.monotonic() - started)}')
                 lines.append('Индикатор обновляется каждые 3 с; время не означает продвижение операции.')
-            lines.extend(['', 'Ctrl+C — закрыть просмотр; установка работает отдельно.'])
+            if status == 'READY_FOR_ADMIN':
+                lines.extend(['', '100% — готовность компонентов; настройка пользователя выполняется отдельно.',
+                              'Завершить настройку: sudo /opt/shtab-ai-021/shtabctl finish'])
+            else:
+                lines.extend(['', 'Ctrl+C — закрыть просмотр; установка работает отдельно.'])
             final_text = '\n'.join(lines)
             if live or content != previous_content or time.monotonic() - last_display >= 30:
                 display(final_text, live=live)
