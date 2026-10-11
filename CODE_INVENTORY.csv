@@ -157,7 +157,7 @@ tests/Test-WSLProbe.ps1,Тесты поставки,.ps1,23,23
 tests/Test-WSLRuntimeInstall.ps1,Тесты поставки,.ps1,56,56
 tests/test_acceleration.py,Тесты поставки,.py,66,55
 tests/test_admin.py,Тесты поставки,.py,270,240
-tests/test_bootstrap_input.py,Тесты поставки,.py,34,28
+tests/test_bootstrap_input.py,Тесты поставки,.py,36,30
 tests/test_cloud_download_timing.py,Тесты поставки,.py,66,59
 tests/test_desktop_shortcut.py,Тесты поставки,.py,62,54
 tests/test_finish_install.py,Тесты поставки,.py,131,117
