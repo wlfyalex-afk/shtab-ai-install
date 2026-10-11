@@ -52,12 +52,28 @@
 ## Установка и обслуживание
 
 
-Основной дистрибутив находится в `main`. Для Windows скачайте только **Start-ShtabAI-Windows.cmd** и запустите его двойным щелчком. Другие файлы вручную скачивать не нужно. Для Ubuntu выберите соответствующий скрипт из таблицы:
+Основной дистрибутив находится в `main`. Для Windows скачайте только **Start-ShtabAI-Windows.cmd** и запустите его двойным щелчком. Другие файлы вручную скачивать не нужно. Для Ubuntu достаточно одной команды установки или одной команды удаления — [инструкция](INSTALL.md). Команда сама скачивает актуальный скрипт из `main` и запускает его:
 
 | ОС | Установка | Полное удаление |
 |---|---|---|
 | Windows Home / Pro | [Install-ShtabAI-Windows.ps1](Install-ShtabAI-Windows.ps1) | [Uninstall-ShtabAI-Windows.ps1](Uninstall-ShtabAI-Windows.ps1) |
 | Ubuntu | [Install-ShtabAI-Ubuntu.sh](Install-ShtabAI-Ubuntu.sh) | [Uninstall-ShtabAI-Ubuntu.sh](Uninstall-ShtabAI-Ubuntu.sh) |
+
+### Ubuntu: быстрый запуск
+
+**Установить:**
+
+```bash
+curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Install-ShtabAI-Ubuntu.sh -o "$HOME/Install-ShtabAI-Ubuntu.sh" && sudo bash "$HOME/Install-ShtabAI-Ubuntu.sh"
+```
+
+**Удалить:**
+
+```bash
+curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Uninstall-ShtabAI-Ubuntu.sh -o "$HOME/Uninstall-ShtabAI-Ubuntu.sh" && sudo bash "$HOME/Uninstall-ShtabAI-Ubuntu.sh"
+```
+
+Вручную скачивать архив проекта, клонировать репозиторий или менять права через `chmod` не нужно. Нужны интернет, `curl` и права `sudo`. Скрипт сохраняется в домашней папке и запускается только после успешной загрузки. При удалении введите `DELETE-SHTAB-021`: пользователи и данные приложения удалятся, внешний кэш моделей и резервные копии сохранятся.
 
 Для Windows доступно меню в одном файле: [Start-ShtabAI-Windows.cmd](https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Start-ShtabAI-Windows.cmd). Сохраните файл и запустите двойным щелчком: **1** — установка с выбором папки, CPU/GPU и доступа по сети, **2** — удаление выбранной установки, **0** — выход. Меню, вопросы и сообщения установщика отображаются по-русски. Файл скачивает актуальные скрипты; требуется интернет. Если WSL отсутствует или встроенная версия устарела, установщик скачивает официальный MSI WSL из Microsoft/WSL и проверяет подпись Microsoft. Перезагрузите Windows по сообщению установщика и снова выберите **1**. Удаление сохраняет WSL и другие приложения; перед удалением данных требуется явное подтверждение.
 
@@ -264,7 +280,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Uninstall-ShtabAI-Wind
 
 Удаление требует ввода `DELETE ShtabAI-021` и удаляет выбранную установку, модели, данные, задачу, собственные правила сети и ярлыки. Другие дистрибутивы, WSL и драйверы сохраняются. Автоматическая копия при полном удалении не создаётся.
 
-## Ubuntu: один файл
+## Ubuntu: установка и удаление одной командой
 
 Установщик выполняет системные действия с правами root. Его можно запускать из обычного терминала: скрипт сам вызывает `sudo` и продолжает установку с правами администратора. В уже открытой root-сессии (`sudo -i`) повторный `sudo` не нужен. Рекомендуется запуск от обычного пользователя, чтобы сохранить его имя в `SUDO_USER` для создания ярлыков; при прямом входе как root без `SUDO_USER` ярлыки пользователя не создаются. Бит выполнения не обязателен при запуске через `bash`.
 
@@ -278,18 +294,13 @@ bash Install-ShtabAI-Ubuntu.sh ask ask main /mnt/data/shtab-ai-021
 
 Общие Docker-образы, кэш сборки и системные пакеты остаются в настроенном системном хранилище Docker; для них нужен дополнительный свободный объём (ориентир 8–12 ГиБ, зависит от режима GPU и кэша). Скрипт не переносит хранилище других Docker-приложений. Выбор папки применяется при новой установке; перенос существующей установки автоматически не выполняется.
 
-Скачайте установщик и выполните:
+Ручная загрузка комплекта не требуется. Запустите в терминале:
 
 ```bash
-bash Install-ShtabAI-Ubuntu.sh
+curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Install-ShtabAI-Ubuntu.sh -o "$HOME/Install-ShtabAI-Ubuntu.sh" && sudo bash "$HOME/Install-ShtabAI-Ubuntu.sh"
 ```
 
-Либо:
-
-```bash
-curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Install-ShtabAI-Ubuntu.sh -o Install-ShtabAI-Ubuntu.sh
-bash Install-ShtabAI-Ubuntu.sh
-```
+Установщик задаст вопросы о папке, режиме CPU/GPU и доступе по сети, проверит кэш, подготовит компоненты, настроит сертификат и предложит создать первого администратора. В конце покажет адрес входа. Повторный запуск при существующей установке продолжит её настройку с сохранением данных.
 
 Все сервисы, включая Ollama, работают в Docker. NVIDIA Container Toolkit устанавливается автоматически при выборе NVIDIA. Установщик не перезапускает Docker с чужими работающими контейнерами ради настройки GPU: в таком случае сначала подготовьте Toolkit. Драйвер видеокарты автоматически не заменяется.
 
@@ -298,10 +309,10 @@ bash Install-ShtabAI-Ubuntu.sh
 Копии по умолчанию: `/var/backups/shtab-ai-021`; при выборе другой папки установки — рядом с ней, с суффиксом `-backups`. Диспетчер проверяет контрольные суммы, предлагает копию по номеру или пути, перед восстановлением создаёт страховочную копию. Восстановление переносит данные в текущую установку, сохраняя её сетевые настройки и секреты. Для переноса между ОС скопируйте каталог резервной копии в новую папку копий.
 
 ```bash
-bash Uninstall-ShtabAI-Ubuntu.sh
+curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Uninstall-ShtabAI-Ubuntu.sh -o "$HOME/Uninstall-ShtabAI-Ubuntu.sh" && sudo bash "$HOME/Uninstall-ShtabAI-Ubuntu.sh"
 ```
 
-Подтверждение: `DELETE-SHTAB-021`. Удаляются контейнеры, данные и модели именно проекта `shtab-ai-021`; копии, Docker и драйверы сохраняются.
+Подтверждение: `DELETE-SHTAB-021`. Удаляются все контейнеры проекта `shtab-ai-021`, включая Ollama, пользователи, записи, результаты и папка приложения. Внешний постоянный кэш моделей, резервные копии, Docker и драйверы сохраняются. Для повторной установки из кэша выберите прежнюю папку установки; при явно заданном `SHTAB_MODEL_CACHE` укажите тот же путь кэша.
 
 ## Ускорение
 
