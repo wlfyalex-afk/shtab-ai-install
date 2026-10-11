@@ -105,8 +105,23 @@ fi
 if [[ -n $mount_unit ]]; then
     expected_unit=$(systemd-escape -p --suffix=mount "$root")
     [[ $mount_unit == "$expected_unit" ]] || { echo 'Неожиданная mount unit; удаление остановлено.'; exit 1; }
-    systemctl disable --now "$mount_unit"
+    # A previous interrupted removal may have deleted the unit while its bind
+    # mount is still active. Unmount explicitly before deleting either directory.
+    if [[ -f /etc/systemd/system/$mount_unit ]]; then
+        systemctl disable "$mount_unit"
+    fi
+    if mountpoint -q -- "$root"; then
+        if ! umount -- "$root"; then
+            echo "Не удалось отключить $root. Закройте терминалы и файловые менеджеры в папке приложения и повторите удаление. Каталог данных сохранён."
+            exit 1
+        fi
+    fi
+    if mountpoint -q -- "$root"; then
+        echo "Каталог $root всё ещё смонтирован. Удаление данных остановлено."
+        exit 1
+    fi
     rm -f "/etc/systemd/system/$mount_unit"
+    rm -f "/etc/systemd/system/local-fs.target.wants/$mount_unit"
     systemctl daemon-reload
     rmdir "$root"
     [[ -f $selected/storage.json && -d $selected/storage ]] || { echo 'Нельзя подтвердить каталог данных после отключения mount.'; exit 1; }

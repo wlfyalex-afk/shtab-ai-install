@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -8,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class UbuntuUninstallTests(unittest.TestCase):
-    def run_uninstall(self, partial=False, answer='DELETE-SHTAB', legacy=False):
+    def run_uninstall(self, partial=False, answer='DELETE-SHTAB', legacy=False, mounted=False, busy=False, unit_present=False):
         with tempfile.TemporaryDirectory() as folder:
             base = Path(folder)
             canonical=base/'shtab-ai'
@@ -59,6 +60,24 @@ sys.exit('Unexpected Docker command')
                 p.write_text('#!/bin/bash\nprintf "%s\\n" "$*" >> "$CALLS"\n')
                 p.chmod(0o755)
             (base / 'units').mkdir()
+            if mounted:
+                selected = base / 'selected'
+                (selected / 'storage').mkdir(parents=True)
+                (selected / 'storage.json').write_text('{}')
+                (app / 'storage.json').write_text(json.dumps({'root': str(selected), 'mount_unit': 'fixture.mount'}))
+                (app / 'scripts/configure-storage.py').write_text('pass\n')
+                (base / 'mounted').touch()
+                if unit_present:
+                    (base / 'units/fixture.mount').touch()
+                for name, body in {
+                    'systemd-escape': 'echo fixture.mount',
+                    'mountpoint': 'test -f "$FIXTURE/mounted"',
+                    'umount': 'echo "umount $*" >> "$CALLS"; if [[ "$BUSY" == 1 ]]; then exit 1; fi; rm "$FIXTURE/mounted"; rm -rf -- "$FIXTURE/shtab-ai/"*',
+                    'systemctl': 'echo "systemctl $*" >> "$CALLS"; if [[ "$*" == *fixture.mount* && ! -f "$FIXTURE/units/fixture.mount" ]]; then echo "Unit file does not exist" >&2; exit 1; fi',
+                }.items():
+                    stub = bin_dir / name
+                    stub.write_text('#!/bin/bash\n'+body+'\n')
+                    stub.chmod(0o755)
             script = (ROOT / 'Uninstall-ShtabAI-Ubuntu.sh').read_text()
             script = script.replace('/opt/shtab-ai', str(canonical)).replace('state=/var/lib/$project', 'state='+str(state))
             script = script.replace('/etc/systemd/system', str(base / 'units'))
@@ -69,9 +88,9 @@ sys.exit('Unexpected Docker command')
             result = subprocess.run(['bash', str(entry)], input=answer+'\n', text=True,
                                     capture_output=True, timeout=10,
                                     env=dict(os.environ, PATH=str(bin_dir)+':'+os.environ['PATH'],
-                                             FIXTURE=str(base), PROJECT=project, CALLS=str(base/'calls')))
+                                             FIXTURE=str(base), PROJECT=project, CALLS=str(base/'calls'), BUSY=str(int(busy))))
             calls = (base / 'calls').read_text() if (base / 'calls').exists() else ''
-            return result, calls, app.exists(), (cache/'model.bin').read_text(), (base/'ollama-running').exists()
+            return result, calls, (selected.exists() if mounted else app.exists()), (cache/'model.bin').read_text(), (base/'ollama-running').exists()
 
     def test_all_profiles_removed_before_volume_deletion(self):
         result, calls, exists, cache, running = self.run_uninstall()
@@ -106,3 +125,26 @@ sys.exit('Unexpected Docker command')
         self.assertTrue(running)
         self.assertNotIn('down --remove-orphans', calls)
         self.assertNotIn('docker volume rm', calls)
+
+    def test_missing_mount_unit_still_unmounts_and_preserves_cache(self):
+        result, calls, exists, cache, _ = self.run_uninstall(mounted=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('umount -- ', calls)
+        self.assertFalse(exists)
+        self.assertEqual(cache, 'cached-model')
+        self.assertNotIn('systemctl disable fixture.mount', calls)
+
+    def test_existing_mount_unit_disabled_before_unmount(self):
+        result, calls, exists, cache, _ = self.run_uninstall(mounted=True, unit_present=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertLess(calls.index('systemctl disable fixture.mount'), calls.index('umount -- '))
+        self.assertFalse(exists)
+        self.assertEqual(cache, 'cached-model')
+
+    def test_busy_mount_preserves_data_and_reports_recovery(self):
+        result, calls, exists, cache, _ = self.run_uninstall(mounted=True, busy=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(exists)
+        self.assertEqual(cache, 'cached-model')
+        self.assertIn('Каталог данных сохранён', result.stdout)
+        self.assertNotIn('полностью удалён', result.stdout)
