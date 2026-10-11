@@ -12,7 +12,7 @@ flock -n 9 || { echo 'Another installer/maintenance operation is running'; exit 
 backup="/var/backups/shtab-ai-021/menu-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 install -d -m 0700 "$backup"
 cp "$dst/shtabctl" "$backup/"
-for name in admin021.py menu.sh check-https.sh; do
+for name in admin021.py menu.sh check-https.sh monitor-install.sh; do
     if [[ -f $dst/scripts/$name ]]; then cp "$dst/scripts/$name" "$backup/"; fi
     install -m 0755 "$src/scripts/$name" "$dst/scripts/$name"
 done

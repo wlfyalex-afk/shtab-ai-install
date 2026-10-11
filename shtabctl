@@ -12,6 +12,7 @@ menu) exec bash scripts/menu.sh ;;
 backup|backups|restore|reset-db) python3 scripts/admin021.py "$action" "${@:2}" ;;
 uninstall) bash uninstall.sh "${2:---keep-data}" ;;
 progress) python3 scripts/install-progress.py "${@:2}" ;;
+monitor) exec bash scripts/monitor-install.sh "${@:2}" ;;
 status)
     cat /var/lib/shtab-ai-021/status 2>/dev/null || true
     systemctl show shtab-ai-install.service -p ActiveState -p SubState -p Result
@@ -47,5 +48,5 @@ stop) dc stop proxy web meeting-worker llm-worker brief-worker ollama ;;
 start)
     if ! grep -q '^SHTAB_OLLAMA_ENDPOINT=' .env; then dc up -d --wait --wait-timeout 240 ollama; fi
     dc up -d --wait --wait-timeout 240 web meeting-worker llm-worker brief-worker proxy ;;
-*) echo 'Commands: menu, backup, backups, restore, reset-db, uninstall, certificate, https-check, status, progress, diagnose, support, logs, resume, bootstrap, check, stop, start'; exit 2 ;;
+*) echo 'Commands: menu, backup, backups, restore, reset-db, uninstall, certificate, https-check, status, progress, monitor, diagnose, support, logs, resume, bootstrap, check, stop, start'; exit 2 ;;
 esac

@@ -20,6 +20,7 @@ while [[ -f $ctl ]]; do
  13  Экспортировать корневой сертификат
  14  Удалить установку
  15  Сохранить диагностику для поддержки
+ 16  Наблюдение за установкой: прогресс, кэш и нагрузка
   0  Выход
 MENU
     read -r -p 'Команда: ' choice || exit 0
@@ -77,6 +78,7 @@ MENU
       12) args=(https-check) ;;
       13) args=(certificate) ;;
       15) args=(support) ;;
+      16) args=(monitor) ;;
       14)
         if [[ -f /opt/shtab-ai-021/storage.json ]]; then
             cd /
