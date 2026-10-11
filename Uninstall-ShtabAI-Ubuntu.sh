@@ -38,7 +38,8 @@ if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
     done
     if [[ -f $root/compose.yaml ]]; then bash "$root/scripts/dc.sh" config --quiet; fi
 fi
-echo 'Будут удалены Штаб.AI, пользователи, записи, результаты и скачанные модели. Резервная копия не создаётся.'
+echo 'Будут удалены Штаб.AI, пользователи, записи, результаты и данные внутри папки приложения. Резервная копия не создаётся.
+Постоянный кэш моделей вне приложения и ранее созданные резервные копии сохраняются.'
 read -r -p 'Для полного удаления введите DELETE-SHTAB-021: ' answer
 [[ $answer == DELETE-SHTAB-021 ]] || { echo 'Отменено.'; exit 0; }
 systemctl stop shtab-ai-install.service 2>/dev/null || true
@@ -92,4 +93,4 @@ else
     rm -rf -- /opt/shtab-ai-021
 fi
 rm -rf -- /var/lib/shtab-ai-021
-echo 'Штаб.AI полностью удалён. Docker, драйверы, другие приложения и ранее созданные резервные копии сохранены.'
+echo 'Штаб.AI полностью удалён. Постоянный кэш моделей вне приложения, резервные копии, Docker, драйверы и другие приложения сохранены.'
