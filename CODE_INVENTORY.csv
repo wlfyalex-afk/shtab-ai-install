@@ -1,0 +1,177 @@
+﻿path,category,language,physical_lines,nonempty_lines
+Cleanup-ShtabAI-RU.ps1,Удаление,.ps1,171,170
+Install-ShtabAI-RU.ps1,Установка,.ps1,845,830
+Install-ShtabAI-Ubuntu.sh,Установка,.sh,188,187
+Install-ShtabAI-Windows.ps1,Установка,.ps1,90,90
+Start-ShtabAI-Windows.cmd,Установка,.cmd,26,26
+Uninstall-ShtabAI-Ubuntu.sh,Удаление,.sh,96,96
+Uninstall-ShtabAI-Windows.ps1,Удаление,.ps1,159,158
+app/admin010_manage.py,Приложение Python,.py,32,31
+app/app.py,Приложение Python,.py,205,187
+app/automation0183.py,Приложение Python,.py,277,248
+app/bootstrap021.py,Приложение Python,.py,76,66
+app/brief_core017.py,Приложение Python,.py,343,309
+app/brief_narrative0182.py,Приложение Python,.py,188,165
+app/brief_web017.py,Приложение Python,.py,128,109
+app/brief_worker017.py,Приложение Python,.py,397,366
+app/call_assist016.py,Приложение Python,.py,180,166
+app/call_assist_core016.py,Приложение Python,.py,31,28
+app/check009.py,Приложение Python,.py,10,10
+app/check0101.py,Приложение Python,.py,11,11
+app/check0102.py,Приложение Python,.py,12,12
+app/check011.py,Приложение Python,.py,11,11
+app/check013.py,Приложение Python,.py,25,22
+app/check016.py,Приложение Python,.py,21,20
+app/check017.py,Приложение Python,.py,34,32
+app/check0171.py,Приложение Python,.py,60,53
+app/check018.py,Приложение Python,.py,35,29
+app/check0181.py,Приложение Python,.py,33,26
+app/check0182.py,Приложение Python,.py,45,38
+app/check0183.py,Приложение Python,.py,36,30
+app/check0184.py,Приложение Python,.py,32,29
+app/check01845.py,Приложение Python,.py,37,31
+app/cloud_download.py,Приложение Python,.py,183,173
+app/comments_reports0184.py,Приложение Python,.py,289,265
+app/docker-workers/ollama_bridge.py,Приложение Python,.py,30,27
+app/docker-workers/worker.py,Приложение Python,.py,46,41
+app/domain.py,Приложение Python,.py,65,61
+app/export0183.py,Приложение Python,.py,170,146
+app/head007_check.py,Приложение Python,.py,20,20
+app/head_access0101.py,Приложение Python,.py,27,27
+app/head_dashboard.py,Приложение Python,.py,107,101
+app/import008_check.py,Приложение Python,.py,20,20
+app/import_common.py,Приложение Python,.py,74,64
+app/installer-entrypoint.py,Приложение Python,.py,16,15
+app/llm_core013.py,Приложение Python,.py,112,105
+app/llm_queue013.py,Приложение Python,.py,11,10
+app/llm_web013.py,Приложение Python,.py,35,35
+app/llm_worker013.py,Приложение Python,.py,106,103
+app/manage.py,Приложение Python,.py,56,54
+app/meeting_import.py,Приложение Python,.py,306,283
+app/meeting_review009.py,Приложение Python,.py,138,127
+app/meeting_worker.py,Приложение Python,.py,343,325
+app/metrics011.py,Приложение Python,.py,40,40
+app/metrics_web011.py,Приложение Python,.py,48,48
+app/multipart_audio.py,Приложение Python,.py,43,41
+app/ops_control018.py,Приложение Python,.py,80,62
+app/ops_web018.py,Приложение Python,.py,234,209
+app/organizations0102.py,Приложение Python,.py,118,108
+app/pipeline0183.py,Приложение Python,.py,61,56
+app/reporting0184.py,Приложение Python,.py,269,238
+app/response_integration0181.py,Приложение Python,.py,207,189
+app/static/brand009.css,Интерфейс HTML/CSS/JS,.css,1,1
+app/static/cassette0132.css,Интерфейс HTML/CSS/JS,.css,18,18
+app/static/comments0184.css,Интерфейс HTML/CSS/JS,.css,1,1
+app/static/head007.css,Интерфейс HTML/CSS/JS,.css,1,1
+app/static/import-status008.js,Интерфейс HTML/CSS/JS,.js,59,59
+app/static/import-upload008.js,Интерфейс HTML/CSS/JS,.js,55,55
+app/static/import008.css,Интерфейс HTML/CSS/JS,.css,1,1
+app/static/meeting-player009.js,Интерфейс HTML/CSS/JS,.js,48,48
+app/static/metrics011.js,Интерфейс HTML/CSS/JS,.js,30,30
+app/static/ops018.css,Интерфейс HTML/CSS/JS,.css,34,34
+app/static/status0183.css,Интерфейс HTML/CSS/JS,.css,1,1
+app/static/status0183.js,Интерфейс HTML/CSS/JS,.js,5,5
+app/static/style.css,Интерфейс HTML/CSS/JS,.css,49,47
+app/static/workflow0182.css,Интерфейс HTML/CSS/JS,.css,1,1
+app/store.py,Приложение Python,.py,124,116
+app/task_drafts009.py,Приложение Python,.py,26,24
+app/templates/_meeting_nav0182.html,Интерфейс HTML/CSS/JS,.html,8,8
+app/templates/_pager0182.html,Интерфейс HTML/CSS/JS,.html,19,19
+app/templates/base.html,Интерфейс HTML/CSS/JS,.html,1,1
+app/templates/brief017.html,Интерфейс HTML/CSS/JS,.html,27,27
+app/templates/call_ready016.html,Интерфейс HTML/CSS/JS,.html,14,14
+app/templates/calls016.html,Интерфейс HTML/CSS/JS,.html,10,10
+app/templates/cloud0081.html,Интерфейс HTML/CSS/JS,.html,14,14
+app/templates/contacts016.html,Интерфейс HTML/CSS/JS,.html,16,16
+app/templates/detail.html,Интерфейс HTML/CSS/JS,.html,4,4
+app/templates/drafts009.html,Интерфейс HTML/CSS/JS,.html,11,11
+app/templates/error.html,Интерфейс HTML/CSS/JS,.html,1,1
+app/templates/group0082.html,Интерфейс HTML/CSS/JS,.html,1,1
+app/templates/group_new0082.html,Интерфейс HTML/CSS/JS,.html,1,1
+app/templates/head007.html,Интерфейс HTML/CSS/JS,.html,13,13
+app/templates/head_meetings0101.html,Интерфейс HTML/CSS/JS,.html,5,5
+app/templates/imports008.html,Интерфейс HTML/CSS/JS,.html,10,10
+app/templates/job008.html,Интерфейс HTML/CSS/JS,.html,14,14
+app/templates/llm013.html,Интерфейс HTML/CSS/JS,.html,8,8
+app/templates/login.html,Интерфейс HTML/CSS/JS,.html,1,1
+app/templates/manual_response0181.html,Интерфейс HTML/CSS/JS,.html,7,7
+app/templates/meeting008.html,Интерфейс HTML/CSS/JS,.html,16,16
+app/templates/meeting_status0183.html,Интерфейс HTML/CSS/JS,.html,40,37
+app/templates/metrics011.html,Интерфейс HTML/CSS/JS,.html,2,2
+app/templates/operations018.html,Интерфейс HTML/CSS/JS,.html,25,25
+app/templates/organizations0102.html,Интерфейс HTML/CSS/JS,.html,1,1
+app/templates/player009.html,Интерфейс HTML/CSS/JS,.html,19,19
+app/templates/queue.html,Интерфейс HTML/CSS/JS,.html,8,8
+app/templates/report_period0184.html,Интерфейс HTML/CSS/JS,.html,5,5
+app/templates/task_detail0181.html,Интерфейс HTML/CSS/JS,.html,7,7
+app/templates/task_detail0184.html,Интерфейс HTML/CSS/JS,.html,9,9
+app/templates/transfer0102.html,Интерфейс HTML/CSS/JS,.html,1,1
+app/templates/upload008.html,Интерфейс HTML/CSS/JS,.html,16,16
+app/templates/users010.html,Интерфейс HTML/CSS/JS,.html,41,37
+app/user_admin010.py,Приложение Python,.py,198,177
+app/workflow0182.py,Приложение Python,.py,179,159
+app/xlsx0184.py,Приложение Python,.py,93,85
+database/schema-ubuntu.sql,Схема SQL,.sql,2222,1484
+install.sh,Установка,.sh,128,128
+scripts/admin021.py,Обслуживание и запуск,.py,444,386
+scripts/apply-asr-cpu.py,Обслуживание и запуск,.py,20,16
+scripts/check-https.sh,Обслуживание и запуск,.sh,59,59
+scripts/configure-acceleration.py,Установка,.py,41,35
+scripts/configure-https.py,Установка,.py,59,53
+scripts/configure-storage.py,Установка,.py,89,76
+scripts/create-desktop-shortcut.py,Установка,.py,56,52
+scripts/dc.sh,Обслуживание и запуск,.sh,10,10
+scripts/diagnose.sh,Обслуживание и запуск,.sh,21,20
+scripts/download-asr.py,Установка,.py,130,127
+scripts/enable-https.sh,Установка,.sh,64,64
+scripts/gpu_fallback.py,Установка,.py,34,28
+scripts/install-menu.sh,Установка,.sh,24,24
+scripts/install-progress.py,Обслуживание и запуск,.py,139,127
+scripts/install-user-position.sh,Установка,.sh,40,40
+scripts/install_operation.py,Установка,.py,58,52
+scripts/menu.sh,Обслуживание и запуск,.sh,114,113
+scripts/model_cache.py,Установка,.py,77,67
+scripts/model_progress.py,Установка,.py,73,64
+scripts/monitor-install.sh,Установка,.sh,147,146
+scripts/network-firewall.sh,Обслуживание и запуск,.sh,28,28
+scripts/ollama-api.py,Обслуживание и запуск,.py,117,105
+scripts/prepare-gpu.sh,Установка,.sh,39,39
+scripts/provision.sh,Установка,.sh,116,114
+scripts/resume-install.sh,Обслуживание и запуск,.sh,37,37
+scripts/runtime-config.py,Обслуживание и запуск,.py,51,47
+scripts/support-report.py,Обслуживание и запуск,.py,97,86
+scripts/worker-loop.py,Обслуживание и запуск,.py,43,42
+tests/Test-BootstrapDownload.ps1,Тесты поставки,.ps1,48,48
+tests/Test-CleanupPaths.ps1,Тесты поставки,.ps1,68,67
+tests/Test-DownloadCache.ps1,Тесты поставки,.ps1,36,36
+tests/Test-DownloadResume.ps1,Тесты поставки,.ps1,53,53
+tests/Test-GPUSelection.ps1,Тесты поставки,.ps1,15,15
+tests/Test-InstallationProgress.ps1,Тесты поставки,.ps1,28,28
+tests/Test-MemoryLimits.ps1,Тесты поставки,.ps1,24,24
+tests/Test-RuntimeNetwork.ps1,Тесты поставки,.ps1,44,44
+tests/Test-SupportDiagnostics.ps1,Тесты поставки,.ps1,37,36
+tests/Test-VirtualizationPreflight.ps1,Тесты поставки,.ps1,38,38
+tests/Test-WSLProbe.ps1,Тесты поставки,.ps1,23,23
+tests/Test-WSLRuntimeInstall.ps1,Тесты поставки,.ps1,56,56
+tests/test_acceleration021.py,Тесты поставки,.py,66,55
+tests/test_admin021.py,Тесты поставки,.py,258,229
+tests/test_cloud_download_timing.py,Тесты поставки,.py,66,59
+tests/test_gpu_fallback.py,Тесты поставки,.py,59,53
+tests/test_install_operation.py,Тесты поставки,.py,100,90
+tests/test_installer021.py,Тесты поставки,.py,188,177
+tests/test_memory_policy.py,Тесты поставки,.py,23,21
+tests/test_menu021.py,Тесты поставки,.py,74,64
+tests/test_model_cache.py,Тесты поставки,.py,79,71
+tests/test_resume_install.py,Тесты поставки,.py,72,64
+tests/test_runtime_progress.py,Тесты поставки,.py,66,60
+tests/test_storage021.py,Тесты поставки,.py,77,66
+tests/test_support_report.py,Тесты поставки,.py,56,51
+tests/test_user_position021.py,Тесты поставки,.py,107,89
+uninstall.sh,Удаление,.sh,87,87
+windows/Collect-ShtabDiagnostics.ps1,Обслуживание и запуск,.ps1,78,78
+windows/Download-Cache.ps1,Установка,.ps1,56,56
+windows/Install-Progress.ps1,Обслуживание и запуск,.ps1,188,179
+windows/Install-WSL.ps1,Установка,.ps1,580,577
+windows/Manage-ShtabAI.ps1,Обслуживание и запуск,.ps1,78,77
+windows/Start-ShtabRuntime.ps1,Обслуживание и запуск,.ps1,157,156
+windows/Test-ShtabGPU.ps1,Обслуживание и запуск,.ps1,56,56
