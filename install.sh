@@ -98,7 +98,7 @@ if [[ -n ${SHTAB_EXTERNAL_OLLAMA_ENDPOINT:-} ]]; then
     printf 'SHTAB_OLLAMA_ENDPOINT=%s\n' "$SHTAB_EXTERNAL_OLLAMA_ENDPOINT" >> "$dst/.env"
     printf '%s\n' "${SHTAB_WINDOWS_ACCELERATION:-cpu}" > "$dst/windows-acceleration"
 fi
-python3 "$dst/scripts/model_cache.py" "$dst" "${SHTAB_MODEL_CACHE:-/var/cache/shtab-ai}"
+python3 "$dst/scripts/model_cache.py" "$dst" "${SHTAB_MODEL_CACHE:-}"
 chmod 755 "$dst/shtabctl" "$dst/scripts/provision.sh"
 cat > /etc/systemd/system/shtab-ai-install.service <<EOF
 [Unit]

@@ -20,6 +20,33 @@ fi
 umask 077
 work=$(mktemp -d /var/tmp/shtab-bootstrap.XXXXXX)
 trap 'rm -rf "$work"' EXIT
+run_step() {
+    python3 - "$@" <<'PY'
+import subprocess, sys, time
+title, *args = sys.argv[1:]
+print('Штаб.AI: ' + title, flush=True)
+started = time.monotonic()
+process = subprocess.Popen(args)
+try:
+    while True:
+        try:
+            result = process.wait(timeout=30)
+            break
+        except subprocess.TimeoutExpired:
+            print(f'Штаб.AI: {title} | прошло {int(time.monotonic()-started)} с; операция ещё не завершена.', flush=True)
+except BaseException:
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+    raise
+if result:
+    raise SystemExit(result)
+print(f'Штаб.AI: {title} — завершено за {int(time.monotonic()-started)} с.', flush=True)
+PY
+}
 if ! $resuming; then
 if [[ -z $install_dir ]]; then
     lsblk -o NAME,FSTYPE,SIZE,MOUNTPOINTS
@@ -59,15 +86,24 @@ raise SystemExit('Адрес не принадлежит этому компью
 PY
     )
 fi
-apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl unzip python3 openssl
+echo "Приложение: $install_dir"
+if [[ $install_dir == /opt/shtab-ai-021 ]]; then
+    echo "Кэш моделей: ${SHTAB_MODEL_CACHE:-/var/cache/shtab-ai}"
+    echo 'Резервные копии: /var/backups/shtab-ai-021'
+else
+    echo "Кэш моделей: ${SHTAB_MODEL_CACHE:-${install_dir}-cache}"
+    echo "Резервные копии: ${install_dir}-backups"
+fi
+echo 'Образы и кэш сборки Docker: системное хранилище Docker.'
+run_step 'Обновление списка системных пакетов' apt-get update
+run_step 'Установка базовых компонентов' env DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl unzip python3 openssl
 if [[ $revision == main ]]; then
-    curl --fail --location --retry 3 https://api.github.com/repos/wlfyalex-afk/shtab-ai-install/commits/main -o "$work/head.json"
+    run_step 'Определение актуальной версии приложения' curl --fail --location --retry 3 https://api.github.com/repos/wlfyalex-afk/shtab-ai-install/commits/main -o "$work/head.json"
     revision=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sha"])' "$work/head.json")
 fi
 [[ $revision =~ ^[a-f0-9]{40}$ ]] || { echo 'Cannot resolve revision'; exit 1; }
 echo "Загрузка Штаб.AI: $revision"
-curl --fail --location --retry 3 --connect-timeout 20 --proto '=https' --proto-redir '=https' --progress-bar \
+run_step 'Загрузка архива приложения' curl --fail --location --retry 3 --connect-timeout 20 --proto '=https' --proto-redir '=https' --progress-bar \
     "https://github.com/wlfyalex-afk/shtab-ai-install/archive/$revision.zip" -o "$work/source.zip"
 python3 - "$work/source.zip" <<'PY'
 from pathlib import PurePosixPath
@@ -78,13 +114,13 @@ with zipfile.ZipFile(sys.argv[1]) as z:
         if p.is_absolute() or '..' in p.parts or '\\' in entry.filename or ':' in entry.filename:
             raise SystemExit('Unsafe archive path')
 PY
-unzip -q "$work/source.zip" -d "$work/source"
+run_step 'Распаковка архива приложения' unzip -q "$work/source.zip" -d "$work/source"
 mapfile -t roots < <(find "$work/source" -mindepth 1 -maxdepth 1 -type d)
 [[ ${#roots[@]} == 1 ]] || { echo 'Unexpected archive layout'; exit 1; }
 cd "${roots[0]}"
-sha256sum --quiet -c SHA256SUMS
+run_step 'Проверка целостности файлов приложения' sha256sum --quiet -c SHA256SUMS
 python3 scripts/configure-storage.py prepare "$install_dir"
-SHTAB_ACCESS="$access" SHTAB_LAN_ADDRESS="$host" SHTAB_LAN_SUBNET="$subnet" bash install.sh "$host" "$mode"
+run_step 'Настройка приложения и проверка кэша моделей' env SHTAB_ACCESS="$access" SHTAB_LAN_ADDRESS="$host" SHTAB_LAN_SUBNET="$subnet" bash install.sh "$host" "$mode"
 else
     # Use the current bootstrap's resume helper even for an older installation.
     (

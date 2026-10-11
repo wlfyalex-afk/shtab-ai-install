@@ -11,6 +11,24 @@ spec.loader.exec_module(cache)
 
 
 class ModelCacheTests(unittest.TestCase):
+    def test_custom_installation_cache_uses_selected_disk(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'canonical'
+            root.mkdir()
+            (root / 'storage.json').write_text(json.dumps({'root': '/mnt/shtab-ai/ShtabAI'}))
+            self.assertEqual(cache.default_cache(root), Path('/mnt/shtab-ai/ShtabAI-cache'))
+
+    def test_existing_model_mounts_are_preserved_on_repeated_setup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'app'
+            root.mkdir()
+            shared = Path(directory) / 'old-cache'
+            cache.configure(root, shared)
+            (root / 'storage.json').write_text(json.dumps({'root': '/mnt/data/app'}))
+            self.assertEqual(cache.default_cache(root), shared)
+            cache.configure(root, cache.default_cache(root))
+            self.assertEqual(cache.default_cache(root), shared)
+
     def test_hashes_and_corruption(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'model.bin'

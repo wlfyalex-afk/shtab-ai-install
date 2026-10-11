@@ -63,6 +63,13 @@ def display(text, live=False):
     else:
         print(text, flush=True)
 
+
+def elapsed(seconds):
+    seconds = max(0, int(seconds))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f'{hours:02d}:{minutes:02d}:{seconds:02d}'
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--once', action='store_true', help='Показать один раз')
@@ -72,7 +79,8 @@ def main():
     args = parser.parse_args()
     live = sys.stdout.isatty() and not args.once and not args.json
     started = time.monotonic()
-    previous = None
+    last_display = started - 30
+    previous_content = None
     final_text = ''
     if live:
         print('\033[?1049h\033[?25l', end='', flush=True)
@@ -95,15 +103,24 @@ def main():
             if status in ('DOWNLOADING_QWEN', 'DOWNLOADING_WHISPER'):
                 lines.append(describe(progress))
             elif current:
-                lines.append(current['text'])
+                lines.extend(['Операция: ' + current['title'], current['text']])
             if status.startswith('FAILED'):
                 lines.extend(['', 'Служба:', command(['systemctl', 'show', 'shtab-ai-install.service', '-p', 'ActiveState', '-p', 'SubState', '-p', 'Result']),
                               '', 'Последние сообщения:', '\n'.join(journal.splitlines()[-5:])])
+            content = '\n'.join(lines)
+            if not args.once:
+                try:
+                    stage_seconds = time.time() - pathlib.Path(args.state_file).stat().st_mtime
+                except FileNotFoundError:
+                    stage_seconds = 0
+                lines.append(f'Время этапа: {elapsed(stage_seconds)} | Время просмотра: {elapsed(time.monotonic() - started)}')
+                lines.append('Индикатор обновляется каждые 3 с; время не означает продвижение операции.')
             lines.extend(['', 'Ctrl+C — закрыть просмотр; установка работает отдельно.'])
             final_text = '\n'.join(lines)
-            if live or final_text != previous:
+            if live or content != previous_content or time.monotonic() - last_display >= 30:
                 display(final_text, live=live)
-                previous = final_text
+                previous_content = content
+                last_display = time.monotonic()
             if args.once or status == 'READY_FOR_ADMIN' or status.startswith('FAILED'):
                 break
             if args.timeout and time.monotonic() - started >= args.timeout:

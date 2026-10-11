@@ -6,6 +6,24 @@ from pathlib import Path
 import sys
 
 
+def default_cache(root):
+    # Keep an existing installation's model mounts when setup is repeated.
+    existing = root / 'compose.cache.yaml'
+    if existing.is_file():
+        volumes = json.loads(existing.read_text())['volumes']
+        whisper = Path(volumes['asr_models']['driver_opts']['device'])
+        ollama = Path(volumes['ollama_models']['driver_opts']['device'])
+        if whisper.name != 'whisper' or ollama.name != 'ollama' or whisper.parent != ollama.parent:
+            raise ValueError('Existing model cache paths disagree; automatic relocation is disabled')
+        return whisper.parent
+    metadata = root / 'storage.json'
+    if metadata.is_file():
+        selected = Path(json.loads(metadata.read_text())['root'])
+        if selected != Path('/opt/shtab-ai-021'):
+            return selected.with_name(selected.name + '-cache')
+    return Path('/var/cache/shtab-ai')
+
+
 def matches(path, expected, size=None):
     if not path.is_file() or path.is_symlink():
         return False
@@ -55,4 +73,5 @@ def configure(root, cache):
 
 
 if __name__ == '__main__':
-    configure(Path(sys.argv[1]), Path(sys.argv[2]))
+    root = Path(sys.argv[1])
+    configure(root, Path(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2] else default_cache(root))

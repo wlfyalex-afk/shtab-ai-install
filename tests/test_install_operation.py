@@ -18,6 +18,24 @@ spec.loader.exec_module(progress)
 
 
 class InstallOperationTests(unittest.TestCase):
+    def test_unchanged_stage_reports_elapsed_time_in_noninteractive_output(self):
+        with tempfile.TemporaryDirectory() as folder:
+            state = Path(folder) / 'status'
+            state.write_text('INSTALLING_DEPENDENCIES')
+            stream = io.StringIO()
+            clock = [0]
+            def tick(seconds):
+                clock[0] += 30
+                if clock[0] >= 60:
+                    state.write_text('READY_FOR_ADMIN')
+            with patch.object(sys, 'argv', ['install-progress.py', '--state-file', str(state)]), contextlib.redirect_stdout(stream), patch.object(progress.time, 'monotonic', side_effect=lambda: clock[0]), patch.object(progress.time, 'sleep', side_effect=tick):
+                progress.main()
+            output = stream.getvalue()
+            self.assertIn('Время просмотра: 00:00:00', output)
+            self.assertIn('Время просмотра: 00:00:30', output)
+            self.assertIn('Время просмотра: 00:01:00', output)
+            self.assertIn('Компоненты готовы', output)
+
     def test_journal_is_scoped_to_current_invocation(self):
         invocation = 'a' * 32
         with patch.object(progress, 'command', side_effect=[invocation, 'current attempt']) as run:
@@ -37,7 +55,7 @@ class InstallOperationTests(unittest.TestCase):
             run.assert_not_called()
             self.assertIn('Устанавливаем Docker', stream.getvalue())
             self.assertNotIn('Последние сообщения', stream.getvalue())
-            self.assertLessEqual(len(stream.getvalue().splitlines()), 7)
+            self.assertLessEqual(len(stream.getvalue().splitlines()), 8)
 
     def test_json_preserves_russian_through_windows_console_code_pages(self):
         with tempfile.TemporaryDirectory() as folder:
