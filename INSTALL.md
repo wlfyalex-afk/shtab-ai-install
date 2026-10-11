@@ -32,8 +32,10 @@ curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Un
 Если удаление завершилось с ошибкой, повторите его с сохранением журнала (при запросе снова введите `DELETE-SHTAB`):
 
 ```bash
-curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Uninstall-ShtabAI-Ubuntu.sh -o "$HOME/Uninstall-ShtabAI-Ubuntu.sh" && sudo bash "$HOME/Uninstall-ShtabAI-Ubuntu.sh" 2>&1 | tee "$HOME/shtab-uninstall.log"
+curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Uninstall-ShtabAI-Ubuntu.sh -o "$HOME/Uninstall-ShtabAI-Ubuntu.sh" && (set -o pipefail; sudo bash "$HOME/Uninstall-ShtabAI-Ubuntu.sh" 2>&1 | tee "$HOME/shtab-uninstall.log")
 ```
+
+Удаление завершено только после сообщения **«Штаб.AI полностью удалён»**. Если сообщение отсутствует, не запускайте новую установку: сначала сохраните ошибку и завершите удаление.
 
 Журнал находится в `~/shtab-uninstall.log` и доступен обычному пользователю. Если папка приложения занята, закройте открытые в ней терминалы и файловые менеджеры, затем повторите команду из домашней папки. Скрипт завершает удаление и при отсутствии файла mount-службы; если отключить сам mount не удалось, папка данных сохраняется.
 

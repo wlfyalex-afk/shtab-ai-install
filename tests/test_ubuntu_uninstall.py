@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class UbuntuUninstallTests(unittest.TestCase):
-    def run_uninstall(self, partial=False, answer='DELETE-SHTAB', legacy=False, mounted=False, busy=False, unit_present=False):
+    def run_uninstall(self, partial=False, answer='DELETE-SHTAB', legacy=False, mounted=False, busy=False, unit_present=False, verify_failure=False):
         with tempfile.TemporaryDirectory() as folder:
             base = Path(folder)
             canonical=base/'shtab-ai'
@@ -65,7 +65,7 @@ sys.exit('Unexpected Docker command')
                 (selected / 'storage').mkdir(parents=True)
                 (selected / 'storage.json').write_text('{}')
                 (app / 'storage.json').write_text(json.dumps({'root': str(selected), 'mount_unit': 'fixture.mount'}))
-                (app / 'scripts/configure-storage.py').write_text('pass\n')
+                (app / 'scripts/configure-storage.py').write_text("raise SystemExit('Storage verification failed')\n" if verify_failure else 'pass\n')
                 (base / 'mounted').touch()
                 if unit_present:
                     (base / 'units/fixture.mount').touch()
@@ -148,3 +148,14 @@ sys.exit('Unexpected Docker command')
         self.assertEqual(cache, 'cached-model')
         self.assertIn('Каталог данных сохранён', result.stdout)
         self.assertNotIn('полностью удалён', result.stdout)
+
+    def test_storage_verification_error_reports_incomplete_removal(self):
+        result, calls, exists, cache, running = self.run_uninstall(mounted=True, verify_failure=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(exists)
+        self.assertTrue(running)
+        self.assertEqual(cache, 'cached-model')
+        self.assertIn('Storage verification failed', result.stderr)
+        self.assertIn('Удаление остановлено: строка', result.stderr)
+        self.assertIn('Полное удаление не завершено', result.stderr)
+        self.assertNotIn('docker volume rm', calls)

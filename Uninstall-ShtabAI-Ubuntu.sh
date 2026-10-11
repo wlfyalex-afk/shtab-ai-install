@@ -1,6 +1,7 @@
 #!/bin/bash
 # Fully delete only this application's resources; shared Docker/drivers stay installed.
 set -euo pipefail
+trap 'code=$?; printf "Удаление остановлено: строка %s, код ошибки %s. Сообщение об ошибке приведено выше. Полное удаление не завершено.\n" "$LINENO" "$code" >&2' ERR
 if [[ $EUID -ne 0 ]]; then exec sudo bash "$(readlink -f "${BASH_SOURCE[0]}")" "$@"; fi
 root=/opt/shtab-ai
 project=shtab-ai
