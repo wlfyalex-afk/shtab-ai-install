@@ -3,7 +3,11 @@
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Запустите с sudo.'; exit 1; }
 cd /opt/shtab-ai
-trap 'echo "Настройка не завершена. Данные сохранены. Повтор: sudo /opt/shtab-ai/shtabctl finish" >&2' ERR
+# Discard only queued terminal keystrokes, never piped input.
+clear_pending_input() {
+    python3 -c 'import sys,termios; sys.stdin.isatty() and termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)' || true
+}
+trap 'clear_pending_input; echo "Настройка не завершена. Данные сохранены. Повтор: sudo /opt/shtab-ai/shtabctl finish" >&2' ERR
 if [[ ${1:-} == --wait ]]; then
     python3 scripts/install-progress.py --timeout 10800
 fi
@@ -34,6 +38,7 @@ if [[ $user_count == 0 ]]; then
         echo 'Запустите: sudo /opt/shtab-ai/shtabctl finish'
         exit 1
     }
+    clear_pending_input
     echo 'Создаём первого администратора. Сейчас появятся вопросы; пароль при вводе не отображается.'
     bash scripts/dc.sh exec web python bootstrap.py
 else
@@ -48,3 +53,4 @@ if [[ $access == lan ]]; then
     echo 'На других ПК добавьте в доверенные публичный сертификат /opt/shtab-ai/shtab-ai-root.crt.'
     echo 'Доступ с другого ПК и доверие его браузера проверяются отдельно.'
 fi
+clear_pending_input

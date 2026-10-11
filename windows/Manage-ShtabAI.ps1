@@ -1,6 +1,11 @@
 ﻿#Requires -Version 5.1
 param([Parameter(Mandatory=$true)][string]$ManifestPath)
 $ErrorActionPreference='Stop'
+trap {
+    Write-Host ('Диспетчер остановлен: '+$_.Exception.Message) -ForegroundColor Red
+    [void](Read-Host 'Нажмите Enter, чтобы закрыть окно')
+    exit 1
+}
 $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
 $principal=New-Object Security.Principal.WindowsPrincipal($identity)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -29,7 +34,6 @@ function Sync-Certificate {
 }
 while ($true) {
     $manifest=Get-Content $ManifestPath -Raw | ConvertFrom-Json
-    Clear-Host
     Write-Host ('Диспетчер Штаб.AI / '+$manifest.DistroName)
     Write-Host '1 — Открыть приложение'
     Write-Host '2 — Управление: копии, восстановление, пользователи и журналы'
@@ -41,11 +45,14 @@ while ($true) {
     Write-Host '8 — Сохранить диагностику для поддержки'
     Write-Host '0 — Выход'
     $choice=Read-Host 'Выберите пункт'
+    try {
+    $global:LASTEXITCODE=0
     switch ($choice) {
         '0' { exit }
         '1' { Start-Process ("https://localhost:$($manifest.HTTPSPort)/login") }
         '2' {
             & $wsl --distribution $manifest.DistroName --user root --exec /opt/shtab-ai/shtabctl menu
+            if ($LASTEXITCODE -ne 0) { throw ('Управление в Ubuntu завершилось ошибкой, код '+$LASTEXITCODE+'. Сообщения выше.') }
             try { Sync-Certificate } catch { Write-Host $_.Exception.Message -ForegroundColor Yellow }
         }
         '3' {
@@ -73,6 +80,10 @@ while ($true) {
         }
         default { Write-Host 'Некорректный выбор.' }
     }
-    [void](Read-Host 'Нажмите Enter')
+    if ($LASTEXITCODE -ne 0) { throw ('Команда завершилась ошибкой, код '+$LASTEXITCODE+'. Сообщения выше.') }
+    } catch {
+        Write-Host ('Действие не завершено: '+$_.Exception.Message) -ForegroundColor Red
+    }
+    [void](Read-Host 'Нажмите Enter, чтобы вернуться в меню')
 }
 

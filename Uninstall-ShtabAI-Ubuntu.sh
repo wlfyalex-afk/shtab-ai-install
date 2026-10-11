@@ -91,7 +91,7 @@ if metadata.exists():
     record=json.loads(metadata.read_text()); path=Path(record['path'])
     if path.name=='ShtabAI.desktop' and path.is_file() and not path.is_symlink():
         text=path.read_text()
-        if '\nURL='+record['url']+'\n' in text: path.unlink()
+        if '\nURL='+record['url']+'\n' in text or '\nExec=xdg-open '+record['url']+'\n' in text: path.unlink()
     if record.get('manager'):
         manager=Path(record['manager'])
         if manager.name=='ShtabAI-Manager.desktop' and manager.is_file() and not manager.is_symlink():

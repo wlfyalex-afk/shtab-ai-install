@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a URL shortcut for the sudo caller, never in root's desktop."""
+"""Create launchable desktop shortcuts for the sudo caller."""
 import json
 import os
 from pathlib import Path
@@ -33,21 +33,38 @@ def create(root, user):
     if created:
         os.chown(desktop, account.pw_uid, account.pw_gid)
     path = desktop / 'ShtabAI.desktop'
-    if path.exists():
-        print(f'Существующий ярлык сохранён: {path}')
+    legacy = '[Desktop Entry]\nVersion=1.0\nType=Link\nName=Штаб.AI\nURL=' + url + '\nIcon=web-browser\n'
+    launcher = '[Desktop Entry]\nVersion=1.0\nType=Application\nName=Штаб.AI\nExec=xdg-open ' + url + '\nTerminal=false\nIcon=web-browser\n'
+    if path.is_symlink() or (path.exists() and path.read_text() not in (legacy, launcher)):
+        print(f'Изменённый ярлык сохранён: {path}')
         return
-    path.write_text('[Desktop Entry]\nVersion=1.0\nType=Link\nName=Штаб.AI\nURL=' + url + '\nIcon=web-browser\n')
+    path.write_text(launcher)
     path.chmod(0o755)
     os.chown(path, account.pw_uid, account.pw_gid)
     manager = desktop / 'ShtabAI-Manager.desktop'
-    if manager.exists():
+    manager_launcher = '[Desktop Entry]\nVersion=1.0\nType=Application\nName=Управление Штаб.AI\nExec=sudo /opt/shtab-ai/shtabctl menu\nTerminal=true\nIcon=utilities-terminal\n'
+    if manager.is_symlink() or (manager.exists() and manager.read_text() != manager_launcher):
         print(f'Существующий ярлык управления сохранён: {manager}')
         manager_record = ''
     else:
-        manager.write_text('[Desktop Entry]\nVersion=1.0\nType=Application\nName=Управление Штаб.AI\nExec=sudo /opt/shtab-ai/shtabctl menu\nTerminal=true\nIcon=utilities-terminal\n')
+        manager.write_text(manager_launcher)
         manager.chmod(0o755)
         os.chown(manager, account.pw_uid, account.pw_gid)
         manager_record = str(manager)
+    # GNOME's desktop launcher requires executable permissions and trusted metadata.
+    session_env = dict(env, XDG_RUNTIME_DIR=f'/run/user/{account.pw_uid}',
+                       DBUS_SESSION_BUS_ADDRESS=f'unix:path=/run/user/{account.pw_uid}/bus')
+    for shortcut in ([path, manager] if manager_record else [path]):
+        if shortcut.is_symlink() or not shortcut.exists():
+            continue
+        try:
+            result = subprocess.run(['runuser', '-u', user, '--', 'gio', 'set', str(shortcut),
+                                     'metadata::trusted', 'true'], env=session_env,
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            if result.returncode:
+                print(f'Для ярлыка {shortcut.name}: правый клик → «Разрешить запуск», затем двойной щелчок.')
+        except OSError:
+            print(f'Для ярлыка {shortcut.name}: правый клик → «Разрешить запуск», затем двойной щелчок.')
     (root / 'desktop-shortcut.json').write_text(json.dumps({'path': str(path), 'url': url, 'manager': manager_record}))
     print(f'Ярлык входа: {path}')
 

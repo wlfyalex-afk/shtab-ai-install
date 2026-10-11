@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import pty
+import select
 import subprocess
 import tempfile
 import unittest
@@ -10,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class FinishTests(unittest.TestCase):
     def run_finish(self, count='0', status='READY_FOR_ADMIN', https_code=0,
-                   interactive=True, collision=False, bootstrap_code=0, wait=False):
+                   interactive=True, collision=False, bootstrap_code=0, wait=False, pending=False):
         with tempfile.TemporaryDirectory() as folder:
             base = Path(folder)
             app, state, bin_dir = (base / name for name in ('app', 'state', 'bin'))
@@ -44,10 +45,14 @@ class FinishTests(unittest.TestCase):
                        COUNT=count, HTTPS_CODE=str(https_code), BOOTSTRAP_CODE=str(bootstrap_code))
             master, slave = pty.openpty()
             try:
+                if pending:
+                    os.write(master, b'\n'*30)
                 result = subprocess.run(['bash', '-c', script, 'finish'] + (['--wait'] if wait else []), env=env,
                                         stdin=slave if interactive else subprocess.DEVNULL,
                                         stdout=slave if interactive else subprocess.PIPE,
                                         stderr=subprocess.PIPE, timeout=10)
+                if pending:
+                    self.assertEqual(select.select([slave], [], [], 0)[0], [], 'Queued Enter leaked back to the shell')
             finally:
                 os.close(slave)
                 os.close(master)
@@ -116,6 +121,10 @@ class FinishTests(unittest.TestCase):
             result = subprocess.run(['bash', '-c', script, 'shtabctl', 'resume'], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0)
             self.assertEqual(result.stdout.splitlines(), ['resume-install.sh', 'finish-install.sh --wait'])
+
+    def test_queued_enter_is_discarded_on_success_and_error(self):
+        self.run_finish(count='1', pending=True)
+        self.run_finish(bootstrap_code=1, pending=True)
 
     def test_old_installation_bootstrap_embeds_current_finalizer(self):
         self.assertIn((ROOT/'scripts/finish-install.sh').read_text(),

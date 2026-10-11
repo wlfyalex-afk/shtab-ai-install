@@ -87,7 +87,11 @@ MENU
             exec bash /opt/shtab-ai/scripts/full-uninstall.sh
         fi
         if [[ -f /opt/shtab-ai/windows-acceleration ]]; then
-            echo 'Для полного удаления используйте Uninstall-ShtabAI-Windows.ps1 в Windows. Копии на диске Windows сохранятся.'
+            echo 'Для полного удаления вернитесь в Windows.'
+            echo 'Откройте Start-ShtabAI-Windows.cmd и выберите 2 — Удалить.'
+            echo 'Если файла нет, скачайте: https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Start-ShtabAI-Windows.cmd'
+            echo 'Программа сама загрузит удаление; отдельный PowerShell-скрипт искать не нужно. Внешний кэш и резервные копии сохранятся.'
+            read -r -p 'Enter — вернуться в меню' _ || exit 0
             continue
         fi
         echo '1 — удалить контейнеры, сохранить данные и конфигурацию'

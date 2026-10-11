@@ -2,6 +2,8 @@
 [CmdletBinding()]
 param([ValidatePattern('^ShtabAI(?:-[A-Za-z0-9-]+)?$')][string]$DistroName,[switch]$ListOnly,[switch]$KeepWindowOpen)
 $ErrorActionPreference='Stop'
+$ProgressPreference='SilentlyContinue'
+$delegated=$false
 function Remove-ShtabShortcuts($Manifest,[string]$Root) {
     $distro = [string]$Manifest.DistroName
     $folders = @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('CommonDesktopDirectory'))
@@ -49,6 +51,7 @@ try {
         if ($DistroName) { $arguments+=' -DistroName '+$DistroName }
         if ($ListOnly) { $arguments+=' -ListOnly' }
         $process=Start-Process $powershell -Verb RunAs -ArgumentList $arguments -Wait -PassThru
+        $delegated=$true
         exit $process.ExitCode
     }
     $base=Join-Path $env:LOCALAPPDATA 'ShtabAI'
@@ -153,7 +156,7 @@ try {
     Write-Host ('Удаление остановлено: '+$_.Exception.Message) -ForegroundColor Red
     exit 1
 } finally {
-    if ($KeepWindowOpen -and $principal -and $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    if ($KeepWindowOpen -and -not $delegated) {
         [void](Read-Host 'Нажмите Enter, чтобы закрыть окно удаления')
     }
 }

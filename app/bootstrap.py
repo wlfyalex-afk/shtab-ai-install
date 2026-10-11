@@ -15,30 +15,46 @@ from store import Store
 
 
 def required(prompt, maximum=200):
-    value = input(prompt).strip()
-    if not value or len(value) > maximum:
-        raise SystemExit(f"Нужно непустое значение до {maximum} символов")
-    return value
+    while True:
+        value = input(prompt).strip()
+        if value and len(value) <= maximum and not any(ord(c) < 32 or ord(c) == 127 for c in value):
+            return value
+        print(f"Нужно непустое значение до {maximum} символов без управляющих знаков. Повторите ввод.")
+
+
+def credentials():
+    organization = required("Название организации: ")
+    display_name = required("Имя первого администратора: ")
+    while True:
+        username = required("Логин (латиница, цифры, _, -): ", 40).lower()
+        if re.fullmatch(r"[a-z][a-z0-9_-]{2,39}", username):
+            break
+        print("Логин: от 3 до 40 символов, начинается с латинской буквы. Повторите ввод.")
+    while True:
+        timezone = input("Часовой пояс [Asia/Vladivostok]: ").strip() or "Asia/Vladivostok"
+        try:
+            ZoneInfo(timezone)
+            break
+        except (ZoneInfoNotFoundError, ValueError):
+            print("Неизвестный часовой пояс. Повторите ввод или нажмите Enter для Asia/Vladivostok.")
+    while True:
+        password = getpass.getpass("Пароль (не менее 14 символов): ")
+        if not 14 <= len(password) <= 200:
+            print("Нужен пароль от 14 до 200 символов. Повторите ввод.")
+            continue
+        if password == getpass.getpass("Повторите пароль: "):
+            break
+        print("Пароли не совпали. Введите пароль заново.")
+    return organization, display_name, username, timezone, password
 
 
 def main():
     config_path = Path(os.environ.get("SHTAB_WEB_CONFIG", "/etc/shtab-ai/secretary-web.json"))
     settings = json.loads(config_path.read_text(encoding="utf-8"))
-    organization = required("Название организации: ")
-    display_name = required("Имя первого администратора: ")
-    username = required("Логин (латиница, цифры, _, -): ", 40).lower()
-    if not re.fullmatch(r"[a-z][a-z0-9_-]{2,39}", username):
-        raise SystemExit("Недопустимый логин")
-    timezone = input("Часовой пояс [Asia/Vladivostok]: ").strip() or "Asia/Vladivostok"
     try:
-        ZoneInfo(timezone)
-    except ZoneInfoNotFoundError:
-        raise SystemExit("Неизвестный часовой пояс")
-    password = getpass.getpass("Пароль (не менее 14 символов): ")
-    if not 14 <= len(password) <= 200:
-        raise SystemExit("Нужен пароль от 14 до 200 символов")
-    if password != getpass.getpass("Повторите пароль: "):
-        raise SystemExit("Пароли не совпали")
+        organization, display_name, username, timezone, password = credentials()
+    except (EOFError, KeyboardInterrupt):
+        raise SystemExit("Создание администратора отменено. Данные не изменены; повторите shtabctl finish.")
 
     org_id, person_id, user_id = (str(uuid.uuid4()) for _ in range(3))
     store = Store(settings)
