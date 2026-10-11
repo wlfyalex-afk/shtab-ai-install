@@ -1,0 +1,36 @@
+name: Publish Windows launcher
+on:
+  push:
+    branches: [main]
+    paths:
+      - Start-ShtabAI-Windows.cmd
+      - .github/workflows/windows-launcher.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: windows-launcher-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify launcher checksum
+        run: |
+          set -euo pipefail
+          awk '$2 == "Start-ShtabAI-Windows.cmd" { print; found=1 } END { if (!found) exit 1 }' SHA256SUMS | sha256sum -c -
+      - name: Publish downloadable CMD
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="windows-launcher-${GITHUB_SHA:0:12}"
+          printf '%s\n' 'Скачайте Start-ShtabAI-Windows.cmd и откройте двойным щелчком. Пункт 1 — установка, пункт 2 — удаление.' 'Командный файл загружает актуальные скрипты из main; требуется интернет.' > "$RUNNER_TEMP/launcher-notes.md"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release upload "$tag" Start-ShtabAI-Windows.cmd --clobber
+            gh release edit "$tag" --latest
+          else
+            gh release create "$tag" Start-ShtabAI-Windows.cmd --target "$GITHUB_SHA" --title 'Штаб.AI — запуск установки Windows' --notes-file "$RUNNER_TEMP/launcher-notes.md" --latest
+          fi

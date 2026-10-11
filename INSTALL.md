@@ -62,7 +62,7 @@ sudo /opt/shtab-ai/shtabctl finish
 
 ## Windows
 
-Скачайте [Start-ShtabAI-Windows.cmd](https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Start-ShtabAI-Windows.cmd) и запустите двойным щелчком. Пункт 1 — установка, пункт 2 — удаление. Другие файлы вручную скачивать не нужно. Подробности — в [README](README.md).
+Скачайте [Start-ShtabAI-Windows.cmd](https://github.com/wlfyalex-afk/shtab-ai-install/releases/latest/download/Start-ShtabAI-Windows.cmd) из GitHub Release: ссылка скачивает файл. Откройте его из папки «Загрузки» двойным щелчком. Пункт 1 — установка, пункт 2 — удаление. Другие файлы вручную скачивать не нужно. Подробности — в [README](README.md).
 
 ## Сертификат в браузере: Windows и Ubuntu
 
