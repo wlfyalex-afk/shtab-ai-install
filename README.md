@@ -4,7 +4,7 @@
 
 Штаб.AI помогает превратить запись рабочего совещания в стенограмму, проверяемые поручения и короткий бриф руководителю. Секретарь проверяет предложения ИИ, назначает исполнителей и фиксирует результаты ручных звонков. Руководитель видит сроки, препятствия и сведения об исполнении в одном приложении.
 
-**Статус на 11.10.2026:** функциональная первая версия для тестирования. Windows работает по результатам испытаний wlfy. На Ubuntu wlfy проверил установку и удаление; перенос одного совещания между Ubuntu и Windows также проверен и работает. Все варианты оборудования и сети не считаются испытанными.
+**Статус на 12.10.2026:** функциональная первая версия для тестирования. Windows работает по результатам испытаний wlfy. На Ubuntu wlfy проверил установку и удаление; перенос одного совещания между Ubuntu и Windows также проверен и работает. Добавлен общий установщик Ubuntu 24.04 / Astra 1.8 и настройка VPN-подсетей. Автоматические проверки пройдены; чистая установка на Astra и доступ со смартфона ещё требуют испытания на машине. Все варианты оборудования и сети не считаются испытанными.
 
 
 ## Главная мысль проекта
@@ -59,7 +59,7 @@ wlfy рассматривает этот опыт как свидетельст�
 | ОС | Установка | Полное удаление |
 |---|---|---|
 | Windows Home / Pro | [Install-ShtabAI-Windows.ps1](Install-ShtabAI-Windows.ps1) | [Uninstall-ShtabAI-Windows.ps1](Uninstall-ShtabAI-Windows.ps1) |
-| Ubuntu | [Install-ShtabAI-Ubuntu.sh](Install-ShtabAI-Ubuntu.sh) | [Uninstall-ShtabAI-Ubuntu.sh](Uninstall-ShtabAI-Ubuntu.sh) |
+| Ubuntu / Astra | [Install-ShtabAI-Linux.sh](Install-ShtabAI-Linux.sh) | [Uninstall-ShtabAI-Linux.sh](Uninstall-ShtabAI-Linux.sh) |
 
 **[Скачать установщик Windows — Start-ShtabAI-Windows.cmd](https://github.com/wlfyalex-afk/shtab-ai-install/releases/latest/download/Start-ShtabAI-Windows.cmd)**
 
@@ -163,14 +163,14 @@ wsl.exe -d ShtabAI -u root --exec /bin/bash -lc 'cd /opt/shtab-ai && bash script
 приложите этот текст и скриншот исходной ошибки. Не удаляйте установку перед
 сохранением журналов.
 
-### Ubuntu
+### Linux: Ubuntu и Astra
 
 #### Установка
 
 В обычном терминале пользователя выполните:
 
 ```bash
-curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Install-ShtabAI-Ubuntu.sh -o "$HOME/Install-ShtabAI-Ubuntu.sh" && sudo bash "$HOME/Install-ShtabAI-Ubuntu.sh"
+curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Install-ShtabAI-Linux.sh -o "$HOME/Install-ShtabAI-Linux.sh" && sudo bash "$HOME/Install-ShtabAI-Linux.sh"
 ```
 
 #### Полное удаление
@@ -179,10 +179,10 @@ curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/In
 
 ```bash
 cd "$HOME"
-curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Uninstall-ShtabAI-Ubuntu.sh -o "$HOME/Uninstall-ShtabAI-Ubuntu.sh" && (set -o pipefail; sudo bash "$HOME/Uninstall-ShtabAI-Ubuntu.sh" 2>&1 | tee "$HOME/shtab-uninstall.log")
+curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Uninstall-ShtabAI-Linux.sh -o "$HOME/Uninstall-ShtabAI-Linux.sh" && (set -o pipefail; sudo bash "$HOME/Uninstall-ShtabAI-Linux.sh" 2>&1 | tee "$HOME/shtab-uninstall.log")
 ```
 
-Подтверждение: `DELETE-SHTAB`. Удаляются приложение и его данные; внешний кэш моделей и резервные копии сохраняются. Успех подтверждает сообщение **«Штаб.AI полностью удалён»**. Если его нет, удаление не завершено: журнал находится в `~/shtab-uninstall.log`. Новую установку начинайте после успешного удаления. [Подробная инструкция](INSTALL.md#ubuntu-2404-lts-x64).
+Подтверждение: `DELETE-SHTAB`. Удаляются приложение и его данные; внешний кэш моделей и резервные копии сохраняются. Успех подтверждает сообщение **«Штаб.AI полностью удалён»**. Если его нет, удаление не завершено: журнал находится в `~/shtab-uninstall.log`. Новую установку начинайте после успешного удаления. [Подробная инструкция](INSTALL.md#linux-ubuntu-2404-lts-и-astra-linux-18-x64).
 
 #### Диагностика
 
@@ -246,7 +246,7 @@ sudo bash /opt/shtab-ai/scripts/dc.sh logs --no-color --since 2h --tail 300 olla
 Подробная таблица требований, ограничения GPU и план чистого теста — в [дорожной карте](ROADMAP.md).
 
 - Windows 10 22H2 x64 или Windows 11 x64; рекомендуется Windows 11. Home поддерживается. Не менее 12 ГБ RAM, рекомендуется 16–24 ГБ и более; 4 логических ядра, включённая виртуализация, минимум 40 ГиБ свободного места. Windows Server не поддерживается.
-- Ubuntu **24.04 LTS x64**, не менее 10 ГБ доступной RAM, 4 ядер и 30 ГиБ свободного места на выбранном разделе; рекомендуется 16–24 ГБ RAM.
+- Ubuntu **24.04 LTS x64** или Astra Linux **1.8 x64**, не менее 10 ГБ доступной RAM, 4 ядер и 30 ГиБ свободного места на выбранном разделе; рекомендуется 16–24 ГБ RAM.
 - Для GPU заранее установите актуальный драйвер производителя. Поддержка зависит от конкретной карты: [матрица Ollama](https://docs.ollama.com/gpu). NVIDIA в Windows должна поддерживать CUDA в WSL. AMD в Ubuntu требует поддерживаемого ROCm-драйвера и доступных `/dev/kfd`, `/dev/dri`.
 - Для GPU рекомендуется 8 ГБ VRAM и более. При нехватке VRAM Ollama может частично использовать CPU; Whisper CUDA может потребовать освобождения памяти. Для неподдерживаемой карты выберите CPU.
 - Запуск требует прав администратора. Компоненты WSL могут потребовать перезагрузку Windows; после неё повторите тот же файл.
@@ -291,14 +291,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Uninstall-ShtabAI-Wind
 
 Удаление требует ввода `DELETE ShtabAI` и удаляет выбранную установку, модели, данные, задачу, собственные правила сети и ярлыки. Другие дистрибутивы, WSL и драйверы сохраняются. Автоматическая копия при полном удалении не создаётся.
 
-## Ubuntu: установка и удаление одной командой
+## Linux: установка и удаление одной командой
 
 Установщик выполняет системные действия с правами root. Его можно запускать из обычного терминала: скрипт сам вызывает `sudo` и продолжает установку с правами администратора. В уже открытой root-сессии (`sudo -i`) повторный `sudo` не нужен. Рекомендуется запуск от обычного пользователя, чтобы сохранить его имя в `SUDO_USER` для создания ярлыков; при прямом входе как root без `SUDO_USER` ярлыки пользователя не создаются. Бит выполнения не обязателен при запуске через `bash`.
 
 Установщик предложит новую папку, например `/mnt/data/shtab-ai`. Раздел должен быть заранее смонтирован на постоянной основе через `/etc/fstab`, иметь файловую систему ext4/xfs/btrfs и не менее 30 ГиБ свободного места. Путь нужен абсолютный, без пробелов и символических ссылок. Можно передать его четвёртым аргументом:
 
 ```bash
-bash Install-ShtabAI-Ubuntu.sh ask ask main /mnt/data/shtab-ai
+bash Install-ShtabAI-Linux.sh ask ask main /mnt/data/shtab-ai
 ```
 
 Файлы приложения и содержимое всех четырёх Docker-томов будут на выбранном разделе. Для совместимости команд `/opt/shtab-ai` становится постоянной bind-привязкой к выбранной папке. Бэкапы хранятся рядом в `/mnt/data/shtab-ai-backups` и сохраняются при удалении. Для стандартного пути папка бэкапов остаётся `/var/backups/shtab-ai`.
@@ -308,19 +308,19 @@ bash Install-ShtabAI-Ubuntu.sh ask ask main /mnt/data/shtab-ai
 Ручная загрузка комплекта не требуется. Запустите в терминале:
 
 ```bash
-curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Install-ShtabAI-Ubuntu.sh -o "$HOME/Install-ShtabAI-Ubuntu.sh" && sudo bash "$HOME/Install-ShtabAI-Ubuntu.sh"
+curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Install-ShtabAI-Linux.sh -o "$HOME/Install-ShtabAI-Linux.sh" && sudo bash "$HOME/Install-ShtabAI-Linux.sh"
 ```
 
 Установщик задаст вопросы о папке, режиме CPU/GPU и доступе по сети, проверит кэш, подготовит компоненты, настроит сертификат и предложит создать первого администратора. В конце покажет адрес входа. Повторный запуск при существующей установке продолжит её настройку с сохранением данных.
 
-Все сервисы, включая Ollama, работают в Docker. NVIDIA Container Toolkit устанавливается автоматически при выборе NVIDIA. Установщик не перезапускает Docker с чужими работающими контейнерами ради настройки GPU: в таком случае сначала подготовьте Toolkit. Драйвер видеокарты автоматически не заменяется.
+Все сервисы, включая Ollama, работают в Docker. На Ubuntu NVIDIA Container Toolkit устанавливается автоматически при выборе NVIDIA. На Astra для GPU нужен заранее настроенный драйвер и Toolkit; при неудачной проверке используется CPU. Защита Astra автоматически не отключается. Установщик не перезапускает Docker с чужими работающими контейнерами ради настройки GPU: в таком случае сначала подготовьте Toolkit. Драйвер видеокарты автоматически не заменяется.
 
 Приложение: `https://localhost/login` при локальном режиме или `https://<IPv4 компьютера>/login` при сетевом. Ярлыки `ShtabAI` и `ShtabAI-Manager` создаются на рабочем столе пользователя, запустившего `sudo`; на машине без рабочего стола используйте `sudo /opt/shtab-ai/shtabctl menu`. GNOME может предложить разрешить запуск ярлыка.
 
 Копии по умолчанию: `/var/backups/shtab-ai`; при выборе другой папки установки — рядом с ней, с суффиксом `-backups`. Диспетчер проверяет контрольные суммы, предлагает копию по номеру или пути, перед восстановлением создаёт страховочную копию. Восстановление переносит данные в текущую установку, сохраняя её сетевые настройки и секреты. Полная копия заменяет всю базу при восстановлении. Для отдельного совещания используйте перенос из веб-интерфейса. [Пошаговые процедуры резервного копирования и переноса](BACKUP.md).
 
 ```bash
-curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Uninstall-ShtabAI-Ubuntu.sh -o "$HOME/Uninstall-ShtabAI-Ubuntu.sh" && sudo bash "$HOME/Uninstall-ShtabAI-Ubuntu.sh"
+curl -fL https://raw.githubusercontent.com/wlfyalex-afk/shtab-ai-install/main/Uninstall-ShtabAI-Linux.sh -o "$HOME/Uninstall-ShtabAI-Linux.sh" && sudo bash "$HOME/Uninstall-ShtabAI-Linux.sh"
 ```
 
 Подтверждение: `DELETE-SHTAB`. Удаляются все контейнеры проекта `shtab-ai`, включая Ollama, пользователи, записи, результаты и папка приложения. Внешний постоянный кэш моделей, резервные копии, Docker и драйверы сохраняются. Для повторной установки из кэша выберите прежнюю папку установки; при явно заданном `SHTAB_MODEL_CACHE` укажите тот же путь кэша.
@@ -348,7 +348,7 @@ Whisper использует faster-whisper/CTranslate2: этот движок �
 При выборе сети укажите активный IPv4 интерфейс. **Закрепите этот адрес в DHCP/роутере либо назначьте статический**: ярлыки, сертификат и правила используют выбранный адрес. При смене адреса потребуется перенастройка или чистая переустановка.
 
 - Windows: входящий TCP 8445 разрешается из LocalSubnet для Private/Domain сети, проксируется в собственный WSL. Public сеть автоматически не переключается. Адрес WSL обновляется диспетчером при перезапуске.
-- Ubuntu: TCP 443 и 80 публикуются только на выбранном IPv4; отдельная цепочка DOCKER-USER ограничивает источники выбранной подсетью, учитывая обход UFW опубликованными Docker-портами.
+- Linux: TCP 443 и 80 публикуются только на выбранном IPv4; цепочка DOCKER-USER разрешает офисную и явно указанные VPN-подсети. Остальные источники блокируются. Маршруты WireGuard и обратный маршрут настраиваются отдельно.
 - PostgreSQL и API Ollama не публикуются в LAN. API нативной Windows Ollama разрешён только адресу собственного WSL.
 - На каждом клиентском ПК импортируйте **публичный** `shtab-ai-root.crt` в доверенные корневые сертификаты. В Windows диспетчер показывает его путь; в Ubuntu — `~/shtab-ai-root.crt`. Не передавайте `tls-data` или закрытые ключи.
 - В установке проверяются HTTPS, сертификат и страница входа. Затем обязательно откройте URL с другого ПК и загрузите тестовую запись: локальная проверка не проверяет клиентские браузеры, межсетевые экраны и маршрутизаторы.
@@ -421,7 +421,7 @@ Windows-установщики (включая `Install-ShtabAI-RU.ps1`) пре�
 Запустите тот же установщик повторно. На Windows выбирайте **Установить** в том же
 CMD-файле; удаление для продолжения не требуется. Зарегистрированная установка
 продолжается в прежней папке с прежней версией приложения. На Ubuntu повторно
-запустите актуальный `Install-ShtabAI-Ubuntu.sh`.
+запустите актуальный `Install-ShtabAI-Linux.sh`.
 
 Уже работающая фоновая установка продолжает работу; повторный запуск подключает
 индикаторы прогресса. После ошибки или перезагрузки возобновляется подготовка
@@ -457,5 +457,5 @@ sudo /opt/shtab-ai/shtabctl finish
 ```
 
 Для установки со старой версией скриптов скачайте актуальный
-`Install-ShtabAI-Ubuntu.sh` и запустите его снова: он завершит настройку
+`Install-ShtabAI-Linux.sh` и запустите его снова: он завершит настройку
 существующей установки без удаления данных и повторной установки приложения.

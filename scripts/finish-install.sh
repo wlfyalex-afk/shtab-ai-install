@@ -1,5 +1,5 @@
 #!/bin/bash
-# Finish native Ubuntu setup after background provisioning, including a resumed run.
+# Finish native Linux setup after background provisioning, including a resumed run.
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Запустите с sudo.'; exit 1; }
 cd /opt/shtab-ai
@@ -27,7 +27,7 @@ certificate=/usr/local/share/ca-certificates/shtab-ai.crt
     echo 'Другой сертификат с таким именем уже существует; остановлено без перезаписи.'
     exit 1
 }
-echo 'Добавляем корневой сертификат в доверенные сертификаты Ubuntu.'
+echo 'Добавляем корневой сертификат в доверенные сертификаты Linux.'
 install -m 0644 shtab-ai-root.crt "$certificate"
 update-ca-certificates
 user_count=$(bash scripts/dc.sh exec -T db psql -U shtab_ai -d shtab_ai -Atc 'SELECT count(*) FROM secretary_users')

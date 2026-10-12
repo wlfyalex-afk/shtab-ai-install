@@ -19,6 +19,15 @@ status)
     if command -v docker >/dev/null; then dc ps; fi
     ;;
 https-check) bash scripts/check-https.sh ;;
+vpn)
+    [[ $(cat access-mode 2>/dev/null || true) == lan ]] || { echo 'VPN доступ настраивается в режиме локальной сети.'; exit 1; }
+    if [[ $# -gt 1 ]]; then
+        python3 scripts/network-config.py set-vpn /opt/shtab-ai "${@:2}"
+        bash scripts/network-firewall.sh apply
+    else
+        python3 scripts/network-config.py list /opt/shtab-ai
+    fi
+    ;;
 certificate)
     owned_ca=false
     system_ca=/usr/local/share/ca-certificates/shtab-ai.crt
@@ -59,5 +68,5 @@ stop) dc stop proxy web meeting-worker llm-worker brief-worker ollama ;;
 start)
     if ! grep -q '^SHTAB_OLLAMA_ENDPOINT=' .env; then dc up -d --wait --wait-timeout 240 ollama; fi
     dc up -d --wait --wait-timeout 240 web meeting-worker llm-worker brief-worker proxy ;;
-*) echo 'Commands: menu, backup, backups, restore, reset-db, uninstall, certificate, https-check, status, progress, monitor, diagnose, support, logs, resume, finish, bootstrap, check, stop, start'; exit 2 ;;
+*) echo 'Commands: menu, vpn, backup, backups, restore, reset-db, uninstall, certificate, https-check, status, progress, monitor, diagnose, support, logs, resume, finish, bootstrap, check, stop, start'; exit 2 ;;
 esac

@@ -7,10 +7,16 @@ cpu) exit 0 ;;
 nvidia)
     export PATH="/usr/lib/wsl/lib:$PATH"
     command -v nvidia-smi >/dev/null && nvidia-smi -L || {
-        echo 'NVIDIA недоступна. Установите рекомендованный драйвер Ubuntu и перезагрузитесь, затем повторите установку; либо выберите CPU.'
+        echo 'NVIDIA недоступна. Установите подходящий вашей системе драйвер и перезагрузитесь, затем повторите установку; либо выберите CPU.'
         exit 1
     }
     if ! docker info --format '{{json .Runtimes}}' | grep -q '"nvidia"'; then
+        source "$(dirname "${BASH_SOURCE[0]}")/linux-platform.sh"
+        shtab_detect_linux
+        if [[ $SHTAB_LINUX_PROFILE == astra ]]; then
+            echo 'На Astra NVIDIA требует заранее настроенного драйвера и Container Toolkit. Автоматическое изменение защиты и подключение стороннего GPU-репозитория не выполняются; используется CPU.'
+            exit 1
+        fi
         # Restarting Docker must not interrupt unrelated applications.
         [[ -z $(docker ps -q) ]] || {
             echo 'Docker уже обслуживает контейнеры. Настройте NVIDIA Container Toolkit отдельно, либо выберите CPU.'; exit 1;

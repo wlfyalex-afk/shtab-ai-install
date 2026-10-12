@@ -1,5 +1,5 @@
 #!/bin/bash
-# One entry point for Ubuntu 24.04 LTS x64, CPU / NVIDIA / AMD.
+# Standalone Linux installer: Ubuntu 24.04 / Astra 1.8 x64; CPU / prepared GPU.
 set -euo pipefail
 if [[ $EUID -ne 0 ]]; then exec sudo bash "$(readlink -f "${BASH_SOURCE[0]}")" "$@"; fi
 mode=${1:-ask}
@@ -9,8 +9,77 @@ install_dir=${4:-}
 case "$mode" in ask|cpu|nvidia|amd) ;; *) echo 'Acceleration: ask/cpu/nvidia/amd'; exit 2;; esac
 case "$access" in ask|local|lan) ;; *) echo 'Access: ask/local/lan'; exit 2;; esac
 [[ $revision == main || $revision =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid revision'; exit 2; }
-source /etc/os-release
-[[ $ID == ubuntu && $VERSION_ID == 24.04 && $(uname -m) == x86_64 ]] || { echo 'Поддерживается Ubuntu 24.04 LTS x64.'; exit 1; }
+#!/bin/bash
+# Shared host checks; no changes to Astra security policy or vendor drivers.
+shtab_detect_linux() {
+    local ID='' VERSION_ID='' PRETTY_NAME='' arch=${2:-$(uname -m)}
+    source "${1:-/etc/os-release}"
+    [[ $arch == x86_64 ]] || { echo 'Нужна архитектура Linux x86_64.' >&2; return 1; }
+    case "$ID:$VERSION_ID" in
+      ubuntu:24.04) SHTAB_LINUX_PROFILE=ubuntu ;;
+      astra:1.8|astra:1.8.*|astra:1.8_x86-64) SHTAB_LINUX_PROFILE=astra ;;
+      *) echo "Система ${PRETTY_NAME:-$ID $VERSION_ID} пока не поддерживается. Доступны Ubuntu 24.04 и Astra Linux 1.8 x64." >&2; return 1 ;;
+    esac
+    SHTAB_LINUX_NAME=${PRETTY_NAME:-$ID $VERSION_ID}
+    SHTAB_LINUX_VERSION=$VERSION_ID
+}
+
+shtab_select_linux() {
+    local requested=${1:-auto}
+    case $requested in auto|ubuntu|astra) ;; *) echo 'Выбор системы: auto, ubuntu или astra.' >&2; return 2 ;; esac
+    [[ $requested == auto || $requested == "$SHTAB_LINUX_PROFILE" ]] || {
+        echo "Выбрана $requested, но обнаружена $SHTAB_LINUX_NAME. Установка остановлена до изменений." >&2
+        return 1
+    }
+}
+
+shtab_install_docker() {
+    shtab_detect_linux
+    if command -v docker >/dev/null && docker compose version >/dev/null 2>&1 && docker buildx version >/dev/null 2>&1; then
+        echo 'Используем установленный Docker с Compose и Buildx.'
+    elif [[ $SHTAB_LINUX_PROFILE == astra ]] || [[ $(dpkg-query -W -f='${db:Status-Status}' docker.io 2>/dev/null || true) == installed ]]; then
+        echo "Docker: пакеты из репозитория $SHTAB_LINUX_NAME."
+        local package candidate
+        for package in docker.io docker-compose-v2 docker-buildx; do
+            candidate=$(LC_ALL=C apt-cache policy "$package" | awk '/Candidate:/ {print $2; exit}')
+            [[ -n $candidate && $candidate != '(none)' ]] || {
+                echo "В подключённых репозиториях нет $package. Подключите репозиторий вашей версии ОС и повторите установку." >&2
+                return 1
+            }
+        done
+        DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io docker-compose-v2 docker-buildx
+    else
+        # This branch is exclusively Ubuntu 24.04, checked above.
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL --retry 5 https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+        chmod a+r /etc/apt/keyrings/docker.asc
+        cat > /etc/apt/sources.list.d/docker.sources <<'EOF'
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: noble
+Components: stable
+Architectures: amd64
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    fi
+    systemctl enable --now docker
+    docker info >/dev/null
+    docker compose version
+    docker buildx version
+}
+
+distribution=${5:-ask}
+shtab_detect_linux
+if [[ $distribution == ask ]]; then
+    echo "Обнаружена система: $SHTAB_LINUX_NAME"
+    echo '1 — обнаруженная система; 2 — Ubuntu 24.04; 3 — Astra Linux 1.8.'
+    read -r -p 'Система [1]: ' choice
+    case ${choice:-1} in 1) distribution=auto;; 2) distribution=ubuntu;; 3) distribution=astra;; *) exit 2;; esac
+fi
+shtab_select_linux "$distribution"
+echo "Вариант установки: $SHTAB_LINUX_NAME"
 # Detect numbered layouts before creating any new resources; keep them intact.
 for previous in /opt/shtab-ai-[0-9][0-9][0-9]; do
     if [[ -d $previous ]]; then
@@ -77,6 +146,7 @@ if [[ $access == ask ]]; then
 fi
 host=localhost
 subnet=''
+vpn_subnets=${SHTAB_VPN_SUBNETS:-}
 if [[ $access == lan ]]; then
     echo 'Сетевые интерфейсы:'
     ip -br -4 address show scope global
@@ -91,6 +161,24 @@ for interface in json.load(open(sys.argv[2])):
             print(ipaddress.IPv4Network(f'{address}/{item["prefixlen"]}',strict=False));raise SystemExit
 raise SystemExit('Адрес не принадлежит этому компьютеру')
 PY
+    )
+    if [[ -z $vpn_subnets ]]; then
+        echo 'Для доступа через WireGuard можно разрешить его IPv4-подсеть.'
+        echo 'Пример: 10.20.30.0/24; несколько подсетей — через запятую.'
+        read -r -p 'Подсети VPN (Enter — настроить позже): ' vpn_subnets
+    fi
+    vpn_subnets=$(python3 - "$vpn_subnets" <<'PYVPN'
+import ipaddress,re,sys
+values=[]
+for item in re.split(r'[,\s]+',sys.argv[1].strip()):
+    if not item: continue
+    if '/' not in item: raise SystemExit('Укажите IPv4-подсеть с маской.')
+    net=ipaddress.ip_network(item,strict=False)
+    if net.version!=4 or net.prefixlen==0 or net.network_address.is_multicast or net.network_address.is_unspecified:
+        raise SystemExit('Нужна конкретная IPv4-подсеть; 0.0.0.0/0 не разрешается.')
+    if str(net) not in values: values.append(str(net))
+print(','.join(values))
+PYVPN
     )
 fi
 echo "Приложение: $install_dir"
@@ -127,7 +215,7 @@ mapfile -t roots < <(find "$work/source" -mindepth 1 -maxdepth 1 -type d)
 cd "${roots[0]}"
 run_step 'Проверка целостности файлов приложения' sha256sum --quiet -c SHA256SUMS
 python3 scripts/configure-storage.py prepare "$install_dir"
-run_step 'Настройка приложения и проверка кэша моделей' env SHTAB_ACCESS="$access" SHTAB_LAN_ADDRESS="$host" SHTAB_LAN_SUBNET="$subnet" bash install.sh "$host" "$mode"
+run_step 'Настройка приложения и проверка кэша моделей' env SHTAB_ACCESS="$access" SHTAB_LAN_ADDRESS="$host" SHTAB_LAN_SUBNET="$subnet" SHTAB_VPN_SUBNETS="$vpn_subnets" bash install.sh "$host" "$mode"
 else
     # Use the current bootstrap's resume helper even for an older installation.
     (
@@ -177,7 +265,7 @@ fi
 # Embed the current finalizer so older installations can finish without reinstalling.
 finish_native() {
 #!/bin/bash
-# Finish native Ubuntu setup after background provisioning, including a resumed run.
+# Finish native Linux setup after background provisioning, including a resumed run.
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Запустите с sudo.'; exit 1; }
 cd /opt/shtab-ai
@@ -205,7 +293,7 @@ certificate=/usr/local/share/ca-certificates/shtab-ai.crt
     echo 'Другой сертификат с таким именем уже существует; остановлено без перезаписи.'
     exit 1
 }
-echo 'Добавляем корневой сертификат в доверенные сертификаты Ubuntu.'
+echo 'Добавляем корневой сертификат в доверенные сертификаты Linux.'
 install -m 0644 shtab-ai-root.crt "$certificate"
 update-ca-certificates
 user_count=$(bash scripts/dc.sh exec -T db psql -U shtab_ai -d shtab_ai -Atc 'SELECT count(*) FROM secretary_users')

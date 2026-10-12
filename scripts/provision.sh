@@ -12,22 +12,8 @@ dc() { bash scripts/dc.sh "$@"; }
 stage INSTALLING_DEPENDENCIES
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl openssl python3 unzip
-if ! command -v docker >/dev/null || ! docker compose version >/dev/null 2>&1; then
-    install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL --retry 5 https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-    chmod a+r /etc/apt/keyrings/docker.asc
-    cat > /etc/apt/sources.list.d/docker.sources <<EOF
-Types: deb
-URIs: https://download.docker.com/linux/ubuntu
-Suites: noble
-Components: stable
-Architectures: amd64
-Signed-By: /etc/apt/keyrings/docker.asc
-EOF
-    apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-fi
-systemctl enable --now docker
+source scripts/linux-platform.sh
+shtab_install_docker
 if ! bash scripts/prepare-gpu.sh "$(cat acceleration 2>/dev/null || echo cpu)"; then
     echo 'Подготовка GPU не пройдена. Автоматически настраиваем процессор.'
     python3 scripts/configure-acceleration.py /opt/shtab-ai cpu

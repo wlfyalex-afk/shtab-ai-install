@@ -1,9 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Run: sudo bash install.sh'; exit 1; }
-source /etc/os-release
-[[ $ID == ubuntu && $VERSION_ID == 24.04 ]] || { echo 'Requires Ubuntu 24.04 LTS'; exit 1; }
-[[ $(uname -m) == x86_64 ]] || { echo 'Requires amd64'; exit 1; }
+source "$(dirname "${BASH_SOURCE[0]}")/scripts/linux-platform.sh"
+shtab_detect_linux
 [[ $(nproc) -ge 4 ]] || { echo 'Requires at least 4 vCPU'; exit 1; }
 mem=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
 # Windows runs Ollama on the host, so its WSL guest can use 8 GB.
@@ -52,7 +51,7 @@ fi
 mkdir -p "$dst" /var/lib/shtab-ai
 if [[ $src != "$dst" ]]; then
     cp -a "$src/app" "$src/database" "$src/scripts" "$src/compose.yaml" "$src/shtabctl" "$src/uninstall.sh" "$src/https" "$dst/"
-    cp "$src/Uninstall-ShtabAI-Ubuntu.sh" "$dst/scripts/full-uninstall.sh"
+    cp "$src/Uninstall-ShtabAI-Linux.sh" "$dst/scripts/full-uninstall.sh"
 fi
 # The public bootstrap uses umask 077 while unpacking. Only runtime code and
 # public configuration may be read by non-root users inside the containers.
@@ -97,6 +96,7 @@ elif [[ ${SHTAB_ACCESS:-} == lan ]]; then
     printf '%s\n' "$SHTAB_LAN_ADDRESS" > "$dst/lan-address"
     printf '%s\n' "$SHTAB_LAN_SUBNET" > "$dst/lan-subnet"
     echo lan > "$dst/access-mode"
+    python3 "$dst/scripts/network-config.py" init "$dst" "${SHTAB_VPN_SUBNETS:-}"
     sed -i "s/^SHTAB_HTTPS_BIND_IP=.*/SHTAB_HTTPS_BIND_IP=$SHTAB_LAN_ADDRESS/" "$dst/.env"
 fi
 if [[ -n ${SHTAB_HTTPS_PORT:-} ]]; then

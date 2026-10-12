@@ -2,10 +2,12 @@
 .github/workflows/validate.yml,Автоматизация GitHub Actions,.yml,100,99
 .github/workflows/windows-launcher.yml,Автоматизация GitHub Actions,.yml,36,36
 Cleanup-ShtabAI-RU.ps1,Удаление,.ps1,177,176
+Install-ShtabAI-Linux.sh,Установка,.sh,325,320
 Install-ShtabAI-RU.ps1,Установка,.ps1,846,831
-Install-ShtabAI-Ubuntu.sh,Установка,.sh,237,235
+Install-ShtabAI-Ubuntu.sh,Установка,.sh,325,320
 Install-ShtabAI-Windows.ps1,Установка,.ps1,90,90
 Start-ShtabAI-Windows.cmd,Установка,.cmd,26,26
+Uninstall-ShtabAI-Linux.sh,Удаление,.sh,134,134
 Uninstall-ShtabAI-Ubuntu.sh,Удаление,.sh,134,134
 Uninstall-ShtabAI-Windows.ps1,Удаление,.ps1,162,161
 app/admin010_manage.py,Приложение Python,.py,32,31
@@ -134,19 +136,21 @@ scripts/install-menu.sh,Установка,.sh,24,24
 scripts/install-progress.py,Обслуживание и запуск,.py,143,131
 scripts/install-user-position.sh,Установка,.sh,40,40
 scripts/install_operation.py,Установка,.py,58,52
+scripts/linux-platform.sh,Установка,.sh,60,58
 scripts/menu.sh,Обслуживание и запуск,.sh,120,119
 scripts/model_cache.py,Установка,.py,77,67
 scripts/model_progress.py,Установка,.py,73,64
 scripts/monitor-install.sh,Установка,.sh,147,146
-scripts/network-firewall.sh,Обслуживание и запуск,.sh,28,28
+scripts/network-config.py,Обслуживание и запуск,.py,70,60
+scripts/network-firewall.sh,Обслуживание и запуск,.sh,31,31
 scripts/ollama-api.py,Обслуживание и запуск,.py,117,105
-scripts/prepare-gpu.sh,Установка,.sh,39,39
-scripts/provision.sh,Установка,.sh,116,114
+scripts/prepare-gpu.sh,Установка,.sh,45,45
+scripts/provision.sh,Установка,.sh,102,100
 scripts/resume-install.sh,Обслуживание и запуск,.sh,37,37
 scripts/runtime-config.py,Обслуживание и запуск,.py,51,47
 scripts/support-report.py,Обслуживание и запуск,.py,97,86
 scripts/worker-loop.py,Обслуживание и запуск,.py,43,42
-shtabctl,Обслуживание и запуск,.sh,63,63
+shtabctl,Обслуживание и запуск,.sh,72,72
 tests/Test-BootstrapDownload.ps1,Тесты поставки,.ps1,48,48
 tests/Test-CleanupPaths.ps1,Тесты поставки,.ps1,68,67
 tests/Test-DownloadCache.ps1,Тесты поставки,.ps1,36,36
@@ -168,10 +172,12 @@ tests/test_finish_install.py,Тесты поставки,.py,131,117
 tests/test_gpu_fallback.py,Тесты поставки,.py,59,53
 tests/test_install_operation.py,Тесты поставки,.py,100,90
 tests/test_installer.py,Тесты поставки,.py,188,177
+tests/test_linux_platform.py,Тесты поставки,.py,89,77
 tests/test_meeting_transfer.py,Тесты поставки,.py,231,205
 tests/test_memory_policy.py,Тесты поставки,.py,23,21
 tests/test_menu.py,Тесты поставки,.py,74,64
 tests/test_model_cache.py,Тесты поставки,.py,79,71
+tests/test_network_access.py,Тесты поставки,.py,93,81
 tests/test_resume_install.py,Тесты поставки,.py,72,64
 tests/test_runtime_progress.py,Тесты поставки,.py,66,60
 tests/test_storage.py,Тесты поставки,.py,77,66
