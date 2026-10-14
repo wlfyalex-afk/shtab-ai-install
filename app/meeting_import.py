@@ -121,14 +121,19 @@ def cloud_start():
     try:
         host,_=parsed_url(link)
         if kind not in ('YANDEX','HTTPS') or (kind=='YANDEX' and host not in YANDEX_HOSTS):raise ValueError()
-        date=datetime.fromisoformat(request.form.get('meeting_at',''))
-        if date.tzinfo is not None or not 1<=len(title)<=500:raise ValueError()
-        date=date.replace(tzinfo=ZoneInfo(g.user['timezone']))
     except (ValueError,ImportFailure):abort(400)
     uid=str(uuid.uuid4())
     with store().connection() as c,c.cursor() as cur:
         cur.execute('SELECT pg_advisory_xact_lock(8008001)')
         group=requested_group(cur)
+        if group:
+            title,date=group['title'],group['meeting_at']
+        else:
+            try:
+                date=datetime.fromisoformat(request.form.get('meeting_at',''))
+                if date.tzinfo is not None or not 1<=len(title)<=500:raise ValueError()
+                date=date.replace(tzinfo=ZoneInfo(g.user['timezone']))
+            except ValueError:abort(400)
         cur.execute("SELECT count(*) AS n,COALESCE(sum(CASE WHEN source_kind='UPLOAD' THEN total_bytes*2 ELSE total_bytes END),0) AS reserved FROM meeting_imports WHERE status IN ('UPLOADING','QUEUED','FETCHING','ASSEMBLING','CONVERTING','TRANSCRIBING')")
         quota=cur.fetchone()
         if quota['n']>=8 or shutil.disk_usage(root()).free < quota['reserved']+MAX_FILE+10*1024**3:

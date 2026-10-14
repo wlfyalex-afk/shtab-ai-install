@@ -211,6 +211,8 @@ def create_app(settings=None, store=None):
     register_export0183(app)
     from comments_reports0184 import register as register_comments_reports0184
     register_comments_reports0184(app)
+    from meeting_delete import register as register_delete
+    register_delete(app)
     from meeting_transfer import register as register_transfer
     register_transfer(app)
     return app

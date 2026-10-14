@@ -11,7 +11,7 @@ Uninstall-ShtabAI-Linux.sh,Удаление,.sh,134,134
 Uninstall-ShtabAI-Ubuntu.sh,Удаление,.sh,134,134
 Uninstall-ShtabAI-Windows.ps1,Удаление,.ps1,162,161
 app/admin010_manage.py,Приложение Python,.py,32,31
-app/app.py,Приложение Python,.py,216,198
+app/app.py,Приложение Python,.py,218,200
 app/automation0183.py,Приложение Python,.py,277,248
 app/bootstrap.py,Приложение Python,.py,103,89
 app/brief_core017.py,Приложение Python,.py,343,309
@@ -51,7 +51,8 @@ app/llm_queue013.py,Приложение Python,.py,11,10
 app/llm_web013.py,Приложение Python,.py,35,35
 app/llm_worker013.py,Приложение Python,.py,106,103
 app/manage.py,Приложение Python,.py,56,54
-app/meeting_import.py,Приложение Python,.py,306,283
+app/meeting_delete.py,Приложение Python,.py,226,212
+app/meeting_import.py,Приложение Python,.py,311,288
 app/meeting_review009.py,Приложение Python,.py,138,127
 app/meeting_transfer.py,Приложение Python,.py,487,456
 app/meeting_worker.py,Приложение Python,.py,343,325
@@ -80,27 +81,28 @@ app/static/style.css,Интерфейс HTML/CSS/JS,.css,49,47
 app/static/workflow0182.css,Интерфейс HTML/CSS/JS,.css,1,1
 app/store.py,Приложение Python,.py,124,116
 app/task_drafts009.py,Приложение Python,.py,26,24
-app/templates/_meeting_nav0182.html,Интерфейс HTML/CSS/JS,.html,9,9
+app/templates/_meeting_nav0182.html,Интерфейс HTML/CSS/JS,.html,10,10
 app/templates/_pager0182.html,Интерфейс HTML/CSS/JS,.html,19,19
 app/templates/base.html,Интерфейс HTML/CSS/JS,.html,1,1
 app/templates/brief017.html,Интерфейс HTML/CSS/JS,.html,27,27
 app/templates/call_ready016.html,Интерфейс HTML/CSS/JS,.html,14,14
 app/templates/calls016.html,Интерфейс HTML/CSS/JS,.html,10,10
-app/templates/cloud0081.html,Интерфейс HTML/CSS/JS,.html,14,14
+app/templates/cloud0081.html,Интерфейс HTML/CSS/JS,.html,16,16
 app/templates/contacts016.html,Интерфейс HTML/CSS/JS,.html,16,16
 app/templates/detail.html,Интерфейс HTML/CSS/JS,.html,4,4
 app/templates/drafts009.html,Интерфейс HTML/CSS/JS,.html,11,11
 app/templates/error.html,Интерфейс HTML/CSS/JS,.html,1,1
-app/templates/group0082.html,Интерфейс HTML/CSS/JS,.html,1,1
+app/templates/group0082.html,Интерфейс HTML/CSS/JS,.html,23,23
 app/templates/group_new0082.html,Интерфейс HTML/CSS/JS,.html,1,1
 app/templates/head007.html,Интерфейс HTML/CSS/JS,.html,13,13
 app/templates/head_meetings0101.html,Интерфейс HTML/CSS/JS,.html,5,5
 app/templates/imports008.html,Интерфейс HTML/CSS/JS,.html,10,10
-app/templates/job008.html,Интерфейс HTML/CSS/JS,.html,14,14
+app/templates/job008.html,Интерфейс HTML/CSS/JS,.html,15,15
 app/templates/llm013.html,Интерфейс HTML/CSS/JS,.html,8,8
 app/templates/login.html,Интерфейс HTML/CSS/JS,.html,1,1
 app/templates/manual_response0181.html,Интерфейс HTML/CSS/JS,.html,7,7
 app/templates/meeting008.html,Интерфейс HTML/CSS/JS,.html,16,16
+app/templates/meeting_delete.html,Интерфейс HTML/CSS/JS,.html,13,13
 app/templates/meeting_status0183.html,Интерфейс HTML/CSS/JS,.html,40,37
 app/templates/meeting_transfer.html,Интерфейс HTML/CSS/JS,.html,30,30
 app/templates/metrics011.html,Интерфейс HTML/CSS/JS,.html,2,2
@@ -173,6 +175,7 @@ tests/test_gpu_fallback.py,Тесты поставки,.py,59,53
 tests/test_install_operation.py,Тесты поставки,.py,100,90
 tests/test_installer.py,Тесты поставки,.py,188,177
 tests/test_linux_platform.py,Тесты поставки,.py,89,77
+tests/test_meeting_delete.py,Тесты поставки,.py,215,192
 tests/test_meeting_transfer.py,Тесты поставки,.py,231,205
 tests/test_memory_policy.py,Тесты поставки,.py,23,21
 tests/test_menu.py,Тесты поставки,.py,74,64

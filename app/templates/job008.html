@@ -1,6 +1,7 @@
 {% extends 'base.html' %}{% from '_meeting_nav0182.html' import meeting_nav %}{% block content %}
 <link rel="stylesheet" href="{{ url_for('static',filename='import008.css') }}"><link rel="stylesheet" href="{{ url_for('static',filename='workflow0182.css') }}">
 <a href="{{ url_for('imports.index') }}">← Совещания</a><div class="heading"><h1>{{ row.title }}</h1><a class="button" href="{{ url_for('imports.job',uid=row.id) }}">Обновить</a></div>
+{% if g.user.is_admin %}<p><a class="button" href="{{ url_for('meeting_delete.recording',kind='import',uid=row.id) }}">Удалить {{ 'сборку целиком' if row.group_id else 'запись целиком' }}</a></p>{% endif %}
 {% if row.meeting_id %}{{ meeting_nav(row.meeting_id,'status') }}{% endif %}
 <section class="panel" id="import-job" data-state-url="{{ url_for('imports.state',uid=row.id) }}">
 <h2 id="job-status">{{ state.label }}</h2><p>{{ row.original_name }} · {% if row.source_kind!='UPLOAD' and not row.expected_download_bytes %}Размер уточняется{% else %}{{ ((row.expected_download_bytes or row.total_bytes)/1024/1024)|round(1) }} МиБ{% endif %}</p>
