@@ -1,1 +1,23 @@
-{% extends 'base.html' %}{% block content %}<a href="{{ url_for('imports.index') }}">← Совещания</a><h1>{{ group.title }}</h1><p>Части объединяются по порядку. Склеивается только звук. Промежутки между записями неизвестны; повторы автоматически не удаляются. До 8 частей по 16 ГиБ; суммарно до 8 часов звука.</p>{% if group.status=='DRAFT' %}<p><a href="{{ url_for('imports.upload',group_id=group.id) }}">Добавить файл</a> · <a href="{{ url_for('imports.cloud_form',group_id=group.id) }}">Добавить облачную ссылку</a></p>{% endif %}<ol>{% for p in parts %}<li><a href="{{ url_for('imports.job',uid=p.id) }}">{{ p.original_name }}</a> — {{ labels[p.status] }}{% if p.status=='UPLOADING' %} · <a href="{{ url_for('imports.upload',resume=p.id) }}">Продолжить загрузку</a>{% endif %}{% if group.status=='DRAFT' %}<form method="post"><input type="hidden" name="csrf" value="{{ csrf() }}"><input type="hidden" name="part" value="{{ p.id }}">{% if not loop.first %}<button name="action" value="up">Выше</button>{% endif %}{% if not loop.last %}<button name="action" value="down">Ниже</button>{% endif %}</form>{% endif %}</li>{% endfor %}</ol>{% if group.status=='DRAFT' %}<form method="post"><input type="hidden" name="csrf" value="{{ csrf() }}"><button name="action" value="start">Порядок верен — объединить и распознать</button></form>{% elif group.primary_import_id %}<a href="{{ url_for('imports.job',uid=group.primary_import_id) }}">Ход обработки и результат</a>{% endif %}{% endblock %}
+{% extends 'base.html' %}{% block content %}
+<link rel="stylesheet" href="{{ url_for('static',filename='import008.css') }}">
+<a href="{{ url_for('imports.index') }}">← Совещания</a><h1>{{ group.title }}</h1>
+<p>Части объединяются по порядку. Склеивается только звук. Промежутки между записями неизвестны; повторы автоматически не удаляются. До 8 частей по 16 ГиБ; суммарно до 8 часов звука.</p>
+{% if group.status=='DRAFT' %}
+<p><a class="button" href="{{ url_for('imports.upload',group_id=group.id) }}">Добавить файл с компьютера</a></p>
+<section class="panel import-form"><h2>Добавить часть из Яндекс Диска или другого облака</h2>
+<form method="post" action="{{ url_for('imports.cloud_start') }}">
+<input type="hidden" name="csrf" value="{{ csrf() }}"><input type="hidden" name="group_id" value="{{ group.id }}">
+<label>Источник<select name="kind"><option value="YANDEX">Яндекс Диск — публичная ссылка на файл</option><option value="HTTPS">Прямая HTTPS-ссылка на файл</option></select></label>
+<label>Ссылка на часть записи<input name="url" type="url" required maxlength="8192" placeholder="https://disk.yandex.ru/d/…" autocomplete="off"></label>
+<p class="muted">Добавьте каждую ссылку отдельно, затем проверьте порядок частей. Нужен один аудио- или видеофайл, доступный без входа в аккаунт; ссылки на папки и файлы с паролем не поддерживаются. Скачивание начнётся после запуска сборки.</p>
+<button class="primary">Добавить облачную часть</button></form></section>
+{% else %}<p>Сборка уже запущена. Добавление частей доступно при создании новой сборки.</p>{% endif %}
+<h2>Части записи</h2><ol>{% for p in parts %}
+<li><a href="{{ url_for('imports.job',uid=p.id) }}">{{ p.original_name }}</a> — {{ labels[p.status] }}{% if p.source_kind=='YANDEX' %} · Яндекс Диск{% elif p.source_kind=='HTTPS' %} · HTTPS{% endif %}
+{% if p.status=='UPLOADING' %} · <a href="{{ url_for('imports.upload',resume=p.id) }}">Продолжить загрузку</a>{% endif %}
+{% if group.status=='DRAFT' %}<form method="post"><input type="hidden" name="csrf" value="{{ csrf() }}"><input type="hidden" name="part" value="{{ p.id }}">{% if not loop.first %}<button name="action" value="up">Выше</button>{% endif %}{% if not loop.last %}<button name="action" value="down">Ниже</button>{% endif %}</form>{% endif %}</li>
+{% else %}<li>Добавьте файл или облачную ссылку.</li>{% endfor %}</ol>
+{% if group.status=='DRAFT' %}<form method="post"><input type="hidden" name="csrf" value="{{ csrf() }}"><button name="action" value="start" {% if not parts %}disabled{% endif %}>Порядок верен — объединить и распознать</button></form>
+{% elif group.primary_import_id %}<a href="{{ url_for('imports.job',uid=group.primary_import_id) }}">Ход обработки и результат</a>{% endif %}
+{% if g.user.is_admin %}<p><a class="button" href="{{ url_for('meeting_delete.recording',kind='group',uid=group.id) }}">Удалить сборку целиком</a></p>{% endif %}
+{% endblock %}

@@ -5,5 +5,6 @@
   <a href="{{ url_for('meeting_review.drafts',mid=mid) }}"{% if current=='tasks' %} aria-current="page"{% endif %}>Поручения</a>
   <a href="{{ url_for('imports.export',mid=mid,fmt='zip') }}" download>Скачать ZIP ↓</a>
   {% if g.user.get('is_admin') or g.user.get('app_role','secretary')=='secretary' %}<a href="{{ url_for('meeting_transfer.export_form',mid=mid) }}">Перенести совещание</a>{% endif %}
+  {% if g.user.get('is_admin') %}<a href="{{ url_for('meeting_delete.recording',kind='meeting',uid=mid) }}">Удалить запись</a>{% endif %}
 </nav>
 {%- endmacro %}
